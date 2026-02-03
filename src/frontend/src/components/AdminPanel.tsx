@@ -1,0 +1,657 @@
+import React, { useState, useEffect } from 'react';
+import { Routes, Route, NavLink } from 'react-router-dom';
+import { useBackend, User, EventSeries, GlobalSettings, nanosToDate, bytesToHex, dateToNanos, CreateSeriesInput } from '../hooks/useBackend';
+import { useAuth } from '../hooks/useAuth';
+import { Principal } from '@dfinity/principal';
+import { theme } from '../theme';
+
+export default function AdminPanel() {
+  const { isAdmin } = useAuth();
+  
+  if (!isAdmin) {
+    return (
+      <div style={styles.unauthorized}>
+        <h2 style={{ color: theme.textPrimary }}>Admin Access Required</h2>
+        <p>You don't have permission to access this page.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <h2 style={styles.pageTitle}>Admin Panel</h2>
+      
+      <div style={styles.tabs}>
+        <NavLink to="/dashboard/admin" end style={tabStyle}>Users</NavLink>
+        <NavLink to="/dashboard/admin/series" style={tabStyle}>Event Series</NavLink>
+        <NavLink to="/dashboard/admin/settings" style={tabStyle}>Settings</NavLink>
+        <NavLink to="/dashboard/admin/reports" style={tabStyle}>Reports</NavLink>
+      </div>
+      
+      <div style={styles.content}>
+        <Routes>
+          <Route index element={<UserManagement />} />
+          <Route path="series" element={<EventSeriesManagement />} />
+          <Route path="settings" element={<SystemSettings />} />
+          <Route path="reports" element={<Reports />} />
+        </Routes>
+      </div>
+    </div>
+  );
+}
+
+const tabStyle = ({ isActive }: { isActive: boolean }) => ({
+  ...styles.tab,
+  ...(isActive ? styles.tabActive : {}),
+});
+
+// ============== USER MANAGEMENT ==============
+function UserManagement() {
+  const { actor, loading: actorLoading } = useBackend();
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  const fetchUsers = async () => {
+    if (!actor) return;
+    setLoading(true);
+    try {
+      const result = await actor.list_users();
+      if ('Ok' in result) setUsers(result.Ok);
+      else setError(getErrorMessage(result.Err));
+    } catch (err) {
+      setError('Failed to load users');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!actor || actorLoading) return;
+    fetchUsers();
+  }, [actor, actorLoading]);
+
+  const handleToggleStatus = async (user: User) => {
+    if (!actor) return;
+    const key = user.principal.toText();
+    setActionLoading(key);
+    try {
+      const isActive = 'Active' in user.status;
+      const result = isActive ? await actor.disable_user(user.principal) : await actor.enable_user(user.principal);
+      if ('Ok' in result) fetchUsers();
+      else setError(getErrorMessage(result.Err));
+    } catch (err) {
+      setError('Failed to update user status');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  if (actorLoading || loading) return <div style={styles.loading}>Loading users...</div>;
+
+  return (
+    <div>
+      <div style={styles.sectionHeader}>
+        <h3 style={styles.sectionTitle}>Authorized Users</h3>
+        <button style={styles.addBtn} onClick={() => setShowAddForm(!showAddForm)}>
+          {showAddForm ? 'Cancel' : 'Add User'}
+        </button>
+      </div>
+      {error && <div style={styles.error}>{error}</div>}
+      {showAddForm && <AddUserForm actor={actor} onSuccess={() => { setShowAddForm(false); fetchUsers(); }} onCancel={() => setShowAddForm(false)} />}
+      <div style={styles.tableContainer}>
+        <table style={styles.table}>
+          <thead>
+            <tr>
+              <th style={styles.th}>Name</th>
+              <th style={styles.th}>Email</th>
+              <th style={styles.th}>Role</th>
+              <th style={styles.th}>Status</th>
+              <th style={styles.th}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map(user => {
+              const key = user.principal.toText();
+              const isActive = 'Active' in user.status;
+              const isAdminRole = 'Admin' in user.role;
+              return (
+                <tr key={key} style={!isActive ? styles.disabledRow : {}}>
+                  <td style={styles.td}><div style={styles.userName}>{user.name}</div><div style={styles.principalText}>{key.slice(0, 15)}...</div></td>
+                  <td style={styles.td}>{user.email}</td>
+                  <td style={styles.td}><span style={isAdminRole ? styles.adminBadge : styles.userBadge}>{isAdminRole ? 'Admin' : 'User'}</span></td>
+                  <td style={styles.td}><span style={isActive ? styles.activeBadge : styles.disabledBadge}>{isActive ? 'Active' : 'Disabled'}</span></td>
+                  <td style={styles.td}>
+                    <button style={styles.actionBtn} onClick={() => handleToggleStatus(user)} disabled={actionLoading === key}>
+                      {actionLoading === key ? '...' : (isActive ? 'Disable' : 'Enable')}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function AddUserForm({ actor, onSuccess, onCancel }: { actor: any; onSuccess: () => void; onCancel: () => void }) {
+  const [principal, setPrincipal] = useState('');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<'Admin' | 'User'>('User');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!actor) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const principalObj = Principal.fromText(principal.trim());
+      const roleVariant = role === 'Admin' ? { Admin: null } : { User: null };
+      const result = await actor.authorize_user(principalObj, name.trim(), email.trim(), roleVariant);
+      if ('Ok' in result) onSuccess();
+      else setError(getErrorMessage(result.Err));
+    } catch (err: any) {
+      setError(err.message || 'Invalid principal format');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={styles.form}>
+      <h4 style={styles.formTitle}>Add New User</h4>
+      {error && <div style={styles.formError}>{error}</div>}
+      <div style={styles.formRow}><label style={styles.label}>Principal ID</label><input type="text" value={principal} onChange={e => setPrincipal(e.target.value)} placeholder="xxxxx-xxxxx-xxxxx-xxxxx-cai" style={styles.input} required /></div>
+      <div style={styles.formRow}><label style={styles.label}>Name</label><input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="John Doe" style={styles.input} required /></div>
+      <div style={styles.formRow}><label style={styles.label}>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="john@example.com" style={styles.input} required /></div>
+      <div style={styles.formRow}><label style={styles.label}>Role</label><select value={role} onChange={e => setRole(e.target.value as 'Admin' | 'User')} style={styles.select}><option value="User">User</option><option value="Admin">Admin</option></select></div>
+      <div style={styles.formActions}><button type="button" onClick={onCancel} style={styles.cancelBtn}>Cancel</button><button type="submit" disabled={loading} style={styles.submitBtn}>{loading ? 'Adding...' : 'Add User'}</button></div>
+    </form>
+  );
+}
+
+// ============== EVENT SERIES MANAGEMENT ==============
+function EventSeriesManagement() {
+  const { actor, loading: actorLoading } = useBackend();
+  const [series, setSeries] = useState<EventSeries[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingSeries, setEditingSeries] = useState<EventSeries | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const fetchSeries = async () => {
+    if (!actor) return;
+    setLoading(true);
+    try {
+      const result = await actor.list_event_series();
+      if ('Ok' in result) setSeries(result.Ok);
+      else setError(getErrorMessage(result.Err));
+    } catch (err) {
+      setError('Failed to load event series');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!actor || actorLoading) return;
+    fetchSeries();
+  }, [actor, actorLoading]);
+
+  const handleDelete = async (s: EventSeries) => {
+    if (!actor) return;
+    if (!confirm(`Delete series "${s.title}"? This cannot be undone.`)) return;
+    const key = bytesToHex(s.series_id as number[]);
+    setDeletingId(key);
+    try {
+      const result = await actor.delete_event_series(s.series_id);
+      if ('Ok' in result) fetchSeries();
+      else setError(getErrorMessage(result.Err));
+    } catch (err) {
+      setError('Failed to delete series');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const getFrequencyLabel = (freq: any) => {
+    if ('Weekly' in freq) return 'Weekly';
+    if ('Biweekly' in freq) return 'Biweekly';
+    if ('Monthly' in freq) return 'Monthly';
+    return 'Unknown';
+  };
+
+  const getWeekdayLabel = (wd: any) => {
+    const map: Record<string, string> = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' };
+    for (const [key, label] of Object.entries(map)) {
+      if (key in wd) return label;
+    }
+    return 'Unknown';
+  };
+
+  const formatTime = (nanos: bigint) => {
+    const date = nanosToDate(nanos);
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  };
+
+  if (actorLoading || loading) return <div style={styles.loading}>Loading event series...</div>;
+
+  return (
+    <div>
+      <div style={styles.sectionHeader}>
+        <h3 style={styles.sectionTitle}>Recurring Event Series</h3>
+        <button style={styles.addBtn} onClick={() => { setShowAddForm(!showAddForm); setEditingSeries(null); }}>
+          {showAddForm ? 'Cancel' : 'Create Series'}
+        </button>
+      </div>
+      {error && <div style={styles.error}>{error}</div>}
+      {showAddForm && (
+        <AddSeriesForm 
+          actor={actor} 
+          onSuccess={() => { setShowAddForm(false); fetchSeries(); }} 
+          onCancel={() => setShowAddForm(false)} 
+        />
+      )}
+      {editingSeries && (
+        <EditSeriesForm
+          actor={actor}
+          series={editingSeries}
+          onSuccess={() => { setEditingSeries(null); fetchSeries(); }}
+          onCancel={() => setEditingSeries(null)}
+        />
+      )}
+      {series.length === 0 ? (
+        <div style={styles.emptyState}>
+          <p style={styles.emptyText}>No event series created yet.</p>
+          <p style={styles.emptyHint}>Create a recurring series to start scheduling office hours.</p>
+        </div>
+      ) : (
+        <div style={styles.seriesList}>
+          {series.map(s => {
+            const key = bytesToHex(s.series_id as number[]);
+            return (
+              <div key={key} style={styles.seriesCard}>
+                <div style={styles.seriesInfo}>
+                  <div style={styles.seriesTitle}>{s.title}</div>
+                  <div style={styles.seriesMeta}>
+                    {getFrequencyLabel(s.frequency)} on {getWeekdayLabel(s.weekday)}s at {formatTime(s.start_date)} · {s.default_duration_minutes} min
+                  </div>
+                  <div style={styles.seriesMeta}>
+                    Started: {nanosToDate(s.start_date).toLocaleDateString()}
+                    {s.end_date.length > 0 ? ` · Ends: ${nanosToDate(s.end_date[0] as bigint).toLocaleDateString()}` : ''}
+                  </div>
+                  {s.notes && <div style={styles.seriesNotes}>{s.notes}</div>}
+                </div>
+                <div style={styles.seriesActions}>
+                  <button style={styles.iconBtn} onClick={() => { setEditingSeries(s); setShowAddForm(false); }}>Edit</button>
+                  <button style={styles.iconBtnDanger} onClick={() => handleDelete(s)} disabled={deletingId === key}>
+                    {deletingId === key ? '...' : 'Delete'}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AddSeriesForm({ actor, onSuccess, onCancel }: { actor: any; onSuccess: () => void; onCancel: () => void }) {
+  const [title, setTitle] = useState('');
+  const [notes, setNotes] = useState('');
+  const [frequency, setFrequency] = useState<'Weekly' | 'Biweekly' | 'Monthly'>('Weekly');
+  const [startDate, setStartDate] = useState('');
+  const [startTime, setStartTime] = useState('14:00');
+  const [endDate, setEndDate] = useState('');
+  const [duration, setDuration] = useState('60');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const derivedWeekday = startDate ? new Date(startDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long' }) : null;
+  const weekdayMap: Record<string, string> = { Sunday: 'Sun', Monday: 'Mon', Tuesday: 'Tue', Wednesday: 'Wed', Thursday: 'Thu', Friday: 'Fri', Saturday: 'Sat' };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!actor || !startDate || !derivedWeekday) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const weekdayKey = weekdayMap[derivedWeekday];
+      const weekdayVariants: Record<string, any> = { Mon: { Mon: null }, Tue: { Tue: null }, Wed: { Wed: null }, Thu: { Thu: null }, Fri: { Fri: null }, Sat: { Sat: null }, Sun: { Sun: null } };
+      const frequencyVariants: Record<string, any> = { Weekly: { Weekly: null }, Biweekly: { Biweekly: null }, Monthly: { Monthly: null } };
+      const startDateTime = new Date(`${startDate}T${startTime}:00`);
+      const input: CreateSeriesInput = {
+        title: title.trim(),
+        notes: notes.trim(),
+        frequency: frequencyVariants[frequency],
+        weekday: weekdayVariants[weekdayKey],
+        weekday_ordinal: [],
+        start_date: dateToNanos(startDateTime),
+        end_date: endDate ? [dateToNanos(new Date(endDate + 'T23:59:59'))] : [],
+        default_duration_minutes: duration ? [parseInt(duration)] : [],
+      };
+      const result = await actor.create_event_series(input);
+      if ('Ok' in result) onSuccess();
+      else setError(getErrorMessage(result.Err));
+    } catch (err: any) {
+      setError(err.message || 'Failed to create series');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={styles.form}>
+      <h4 style={styles.formTitle}>Create Event Series</h4>
+      {error && <div style={styles.formError}>{error}</div>}
+      <div style={styles.formRow}><label style={styles.label}>Title</label><input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="Weekly Office Hours" style={styles.input} required /></div>
+      <div style={styles.formRow}><label style={styles.label}>Notes (optional)</label><textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Open Q&A session" style={styles.textarea} /></div>
+      <div style={styles.formRowGroup}>
+        <div style={styles.formRowHalf}><label style={styles.label}>Frequency</label><select value={frequency} onChange={e => setFrequency(e.target.value as any)} style={styles.select}><option value="Weekly">Weekly</option><option value="Biweekly">Biweekly</option><option value="Monthly">Monthly</option></select></div>
+        <div style={styles.formRowHalf}><label style={styles.label}>Duration</label><select value={duration} onChange={e => setDuration(e.target.value)} style={styles.select}><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option></select></div>
+      </div>
+      <div style={styles.formRowGroup}>
+        <div style={styles.formRowHalf}><label style={styles.label}>First Session Date</label><input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={styles.input} required />{derivedWeekday && <div style={styles.derivedDay}>Every {derivedWeekday}</div>}</div>
+        <div style={styles.formRowHalf}><label style={styles.label}>Start Time</label><input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} style={styles.input} required /></div>
+      </div>
+      <div style={styles.formRow}><label style={styles.label}>End Date (optional)</label><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={styles.input} /></div>
+      <div style={styles.formActions}><button type="button" onClick={onCancel} style={styles.cancelBtn}>Cancel</button><button type="submit" disabled={loading} style={styles.submitBtn}>{loading ? 'Creating...' : 'Create Series'}</button></div>
+    </form>
+  );
+}
+
+function EditSeriesForm({ actor, series, onSuccess, onCancel }: { actor: any; series: EventSeries; onSuccess: () => void; onCancel: () => void }) {
+  const [title, setTitle] = useState(series.title);
+  const [notes, setNotes] = useState(series.notes);
+  const [endDate, setEndDate] = useState(series.end_date.length > 0 ? nanosToDate(series.end_date[0] as bigint).toISOString().split('T')[0] : '');
+  const [duration, setDuration] = useState(series.default_duration_minutes.toString());
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!actor) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const updateInput = {
+        title: [title.trim()],
+        notes: [notes.trim()],
+        end_date: endDate ? [[dateToNanos(new Date(endDate + 'T23:59:59'))]] : [[]],
+        default_duration_minutes: [parseInt(duration)],
+      };
+      const result = await actor.update_event_series(series.series_id, updateInput);
+      if ('Ok' in result) onSuccess();
+      else setError(getErrorMessage(result.Err));
+    } catch (err: any) {
+      setError(err.message || 'Failed to update series');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const weekdayLabel = (() => {
+    const wd = series.weekday;
+    const map: Record<string, string> = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' };
+    for (const [key, label] of Object.entries(map)) { if (key in wd) return label; }
+    return 'Unknown';
+  })();
+
+  return (
+    <form onSubmit={handleSubmit} style={styles.form}>
+      <h4 style={styles.formTitle}>Edit Series</h4>
+      {error && <div style={styles.formError}>{error}</div>}
+      <div style={styles.formRow}><label style={styles.label}>Title</label><input type="text" value={title} onChange={e => setTitle(e.target.value)} style={styles.input} required /></div>
+      <div style={styles.formRow}><label style={styles.label}>Notes</label><textarea value={notes} onChange={e => setNotes(e.target.value)} style={styles.textarea} /></div>
+      <div style={styles.readOnlyInfo}><strong>Schedule:</strong> Every {weekdayLabel} at {nanosToDate(series.start_date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}<br /><small>Schedule cannot be changed. Delete and recreate if needed.</small></div>
+      <div style={styles.formRowGroup}>
+        <div style={styles.formRowHalf}><label style={styles.label}>Duration</label><select value={duration} onChange={e => setDuration(e.target.value)} style={styles.select}><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option></select></div>
+        <div style={styles.formRowHalf}><label style={styles.label}>End Date (optional)</label><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={styles.input} /></div>
+      </div>
+      <div style={styles.formActions}><button type="button" onClick={onCancel} style={styles.cancelBtn}>Cancel</button><button type="submit" disabled={loading} style={styles.submitBtn}>{loading ? 'Saving...' : 'Save Changes'}</button></div>
+    </form>
+  );
+}
+
+// ============== SYSTEM SETTINGS ==============
+function SystemSettings() {
+  const { actor, loading: actorLoading } = useBackend();
+  const [settings, setSettings] = useState<GlobalSettings | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    if (!actor || actorLoading) return;
+    async function fetchSettings() {
+      setLoading(true);
+      try {
+        const result = await actor.get_global_settings();
+        if ('Ok' in result) setSettings(result.Ok);
+        else setError(getErrorMessage(result.Err));
+      } catch (err) {
+        setError('Failed to load settings');
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchSettings();
+  }, [actor, actorLoading]);
+
+  const handleSave = async () => {
+    if (!actor || !settings) return;
+    setSaving(true);
+    setError(null);
+    setSuccess(false);
+    try {
+      const result = await actor.update_global_settings(settings);
+      if ('Ok' in result) { setSuccess(true); setTimeout(() => setSuccess(false), 3000); }
+      else setError(getErrorMessage(result.Err));
+    } catch (err) {
+      setError('Failed to save settings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (actorLoading || loading || !settings) return <div style={styles.loading}>Loading settings...</div>;
+
+  return (
+    <div>
+      <h3 style={styles.sectionTitle}>Global Settings</h3>
+      {error && <div style={styles.error}>{error}</div>}
+      {success && <div style={styles.success}>Settings saved successfully!</div>}
+      <div style={styles.settingsForm}>
+        <div style={styles.settingRow}>
+          <div style={styles.settingInfo}><div style={styles.settingLabel}>Forward Window</div><div style={styles.settingDesc}>How many months ahead to generate event instances</div></div>
+          <div style={styles.settingControl}><input type="number" value={settings.forward_window_months} onChange={e => setSettings({ ...settings, forward_window_months: parseInt(e.target.value) || 2 })} min="1" max="12" style={styles.numberInput} /><span style={styles.settingUnit}>months</span></div>
+        </div>
+        <div style={styles.settingRow}>
+          <div style={styles.settingInfo}><div style={styles.settingLabel}>Default Event Duration</div><div style={styles.settingDesc}>Default length of office hour sessions</div></div>
+          <div style={styles.settingControl}><input type="number" value={settings.default_event_duration_minutes} onChange={e => setSettings({ ...settings, default_event_duration_minutes: parseInt(e.target.value) || 60 })} min="15" max="480" step="15" style={styles.numberInput} /><span style={styles.settingUnit}>minutes</span></div>
+        </div>
+        <div style={styles.settingRow}>
+          <div style={styles.settingInfo}><div style={styles.settingLabel}>Pause Assignments</div><div style={styles.settingDesc}>Temporarily prevent users from assigning hosts</div></div>
+          <div style={styles.settingControl}>
+            <label style={styles.toggleLabel}>
+              <input type="checkbox" checked={settings.claims_paused} onChange={e => setSettings({ ...settings, claims_paused: e.target.checked })} style={styles.checkbox} />
+              <span style={settings.claims_paused ? styles.pausedLabel : styles.activeLabel}>{settings.claims_paused ? 'Paused' : 'Active'}</span>
+            </label>
+          </div>
+        </div>
+        <button style={styles.submitBtn} onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Settings'}</button>
+      </div>
+    </div>
+  );
+}
+
+// ============== REPORTS ==============
+function Reports() {
+  const { actor, loading: actorLoading } = useBackend();
+  const [events, setEvents] = useState<any[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!actor || actorLoading) return;
+    async function fetchData() {
+      setLoading(true);
+      try {
+        const now = new Date();
+        const start = dateToNanos(now);
+        const end = dateToNanos(new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000));
+        const [eventsResult, usersResult] = await Promise.all([actor.list_events(start, end), actor.list_users()]);
+        if ('Ok' in eventsResult) setEvents(eventsResult.Ok);
+        if ('Ok' in usersResult) setUsers(usersResult.Ok);
+      } catch (err) {
+        console.error('Failed to fetch report data:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, [actor, actorLoading]);
+
+  if (actorLoading || loading) return <div style={styles.loading}>Loading report data...</div>;
+
+  const totalEvents = events.length;
+  const assignedEvents = events.filter(e => e.host_principal.length > 0).length;
+  const needsHostEvents = totalEvents - assignedEvents;
+  const coverageRate = totalEvents > 0 ? Math.round((assignedEvents / totalEvents) * 100) : 0;
+
+  const hostCounts: Record<string, { name: string; count: number }> = {};
+  events.forEach(e => {
+    if (e.host_principal.length > 0) {
+      const principal = e.host_principal[0].toText();
+      if (!hostCounts[principal]) {
+        const user = users.find(u => u.principal.toText() === principal);
+        hostCounts[principal] = { name: user?.name || 'Unknown', count: 0 };
+      }
+      hostCounts[principal].count++;
+    }
+  });
+  const sortedHosts = Object.values(hostCounts).sort((a, b) => b.count - a.count);
+
+  return (
+    <div>
+      <h3 style={styles.sectionTitle}>Coverage Reports</h3>
+      <p style={styles.reportSubtitle}>Next 60 days</p>
+      <div style={styles.statsGrid}>
+        <div style={styles.statCard}><div style={styles.statValue}>{totalEvents}</div><div style={styles.statLabel}>Total Sessions</div></div>
+        <div style={styles.statCard}><div style={{ ...styles.statValue, color: theme.accent }}>{assignedEvents}</div><div style={styles.statLabel}>Assigned</div></div>
+        <div style={styles.statCard}><div style={{ ...styles.statValue, color: '#F87171' }}>{needsHostEvents}</div><div style={styles.statLabel}>Needs Host</div></div>
+        <div style={styles.statCard}><div style={styles.statValue}>{coverageRate}%</div><div style={styles.statLabel}>Coverage Rate</div></div>
+      </div>
+      <h4 style={styles.reportSectionTitle}>Host Distribution</h4>
+      {sortedHosts.length === 0 ? <p style={styles.noData}>No hosting data yet.</p> : (
+        <div style={styles.hostList}>
+          {sortedHosts.map(host => (
+            <div key={host.name} style={styles.hostRow}>
+              <span style={styles.hostName}>{host.name}</span>
+              <div style={styles.hostBar}><div style={{ ...styles.hostBarFill, width: `${(host.count / sortedHosts[0].count) * 100}%` }} /></div>
+              <span style={styles.hostCount}>{host.count}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function getErrorMessage(err: any): string {
+  if ('Unauthorized' in err) return 'You are not authorized';
+  if ('NotFound' in err) return 'Not found';
+  if ('InvalidInput' in err) return err.InvalidInput;
+  if ('Conflict' in err) return err.Conflict;
+  if ('InternalError' in err) return err.InternalError;
+  return 'An error occurred';
+}
+
+const styles: { [key: string]: React.CSSProperties } = {
+  unauthorized: { padding: '60px 20px', textAlign: 'center', color: theme.textMuted },
+  pageTitle: { margin: '0 0 24px 0', color: theme.textPrimary, fontSize: '20px', fontWeight: 600 },
+  tabs: { display: 'flex', gap: '4px', marginBottom: '24px', borderBottom: `1px solid ${theme.border}`, paddingBottom: '12px' },
+  tab: { padding: '8px 16px', background: 'transparent', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', color: theme.textMuted, textDecoration: 'none', transition: 'color 150ms ease-out' },
+  tabActive: { color: theme.textPrimary, borderBottom: `2px solid ${theme.accent}`, marginBottom: '-13px', paddingBottom: '10px' },
+  content: { background: theme.surface, borderRadius: '12px', padding: '24px', border: `1px solid ${theme.border}` },
+  loading: { textAlign: 'center', padding: '40px', color: theme.textMuted },
+  error: { background: 'rgba(248, 113, 113, 0.1)', color: '#F87171', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', border: '1px solid rgba(248, 113, 113, 0.2)', fontSize: '14px' },
+  success: { background: 'rgba(99, 102, 241, 0.1)', color: theme.accent, padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', border: `1px solid ${theme.accentFocus}`, fontSize: '14px' },
+  sectionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
+  sectionTitle: { margin: 0, fontSize: '16px', color: theme.textPrimary, fontWeight: 600 },
+  addBtn: { padding: '8px 16px', background: theme.accent, color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500, transition: 'background 150ms ease-out' },
+  tableContainer: { overflowX: 'auto' },
+  table: { width: '100%', borderCollapse: 'collapse', fontSize: '14px' },
+  th: { textAlign: 'left', padding: '14px 12px', borderBottom: `1px solid ${theme.border}`, color: theme.textMuted, fontWeight: 500, fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.05em', background: theme.surface },
+  td: { padding: '14px 12px', borderBottom: `1px solid ${theme.border}`, color: theme.textSecondary, background: theme.inputSurface },
+  userName: { color: theme.textPrimary, fontWeight: 500 },
+  disabledRow: { opacity: 0.5 },
+  principalText: { fontSize: '11px', color: theme.textMuted, fontFamily: 'monospace' },
+  adminBadge: { background: 'rgba(251, 191, 36, 0.15)', color: '#FBBF24', padding: '3px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500 },
+  userBadge: { background: 'rgba(99, 102, 241, 0.15)', color: theme.accent, padding: '3px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500 },
+  activeBadge: { background: 'rgba(52, 211, 153, 0.15)', color: '#34D399', padding: '3px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500 },
+  disabledBadge: { background: 'rgba(248, 113, 113, 0.15)', color: '#F87171', padding: '3px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500 },
+  actionBtn: { padding: '6px 12px', background: 'transparent', color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '6px', cursor: 'pointer', fontSize: '13px', transition: 'all 150ms ease-out' },
+  form: { background: theme.surfaceElevated, borderRadius: '12px', padding: '20px', marginBottom: '24px', border: `1px solid ${theme.border}` },
+  formTitle: { marginTop: 0, marginBottom: '16px', fontSize: '16px', color: theme.textPrimary, fontWeight: 600 },
+  formError: { background: 'rgba(248, 113, 113, 0.1)', color: '#F87171', padding: '10px 12px', borderRadius: '8px', marginBottom: '16px', fontSize: '14px', border: '1px solid rgba(248, 113, 113, 0.2)' },
+  formRow: { marginBottom: '16px' },
+  formRowGroup: { display: 'flex', gap: '16px', marginBottom: '16px' },
+  formRowHalf: { flex: 1 },
+  label: { display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500, color: theme.textSecondary },
+  input: { width: '100%', padding: '12px 14px', border: `1px solid ${theme.borderInput}`, borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' as const, background: theme.inputSurface, color: theme.textPrimary, outline: 'none' },
+  textarea: { width: '100%', padding: '12px 14px', border: `1px solid ${theme.borderInput}`, borderRadius: '8px', fontSize: '14px', minHeight: '80px', resize: 'vertical' as const, boxSizing: 'border-box' as const, background: theme.inputSurface, color: theme.textPrimary, outline: 'none' },
+  select: { width: '100%', padding: '12px 14px', border: `1px solid ${theme.borderInput}`, borderRadius: '8px', fontSize: '14px', background: theme.inputSurface, color: theme.textPrimary, cursor: 'pointer' },
+  formActions: { display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '20px' },
+  cancelBtn: { padding: '10px 20px', background: 'transparent', color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '8px', cursor: 'pointer', fontSize: '14px', transition: 'all 150ms ease-out' },
+  submitBtn: { padding: '10px 20px', background: theme.accent, color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500, transition: 'background 150ms ease-out' },
+  derivedDay: { marginTop: '6px', fontSize: '13px', color: theme.accent, fontWeight: 500 },
+  readOnlyInfo: { background: theme.bg, padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', fontSize: '14px', color: theme.textSecondary, border: `1px solid ${theme.border}` },
+  emptyState: { textAlign: 'center', padding: '40px 20px' },
+  emptyText: { color: theme.textSecondary, margin: 0, fontSize: '15px' },
+  emptyHint: { color: theme.textMuted, fontSize: '13px', marginTop: '8px' },
+  seriesList: { display: 'flex', flexDirection: 'column', gap: '12px' },
+  seriesCard: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '16px', background: theme.surfaceElevated, borderRadius: '10px', border: `1px solid ${theme.border}` },
+  seriesInfo: { flex: 1 },
+  seriesTitle: { fontSize: '15px', fontWeight: 600, color: theme.textPrimary, marginBottom: '4px' },
+  seriesMeta: { fontSize: '13px', color: theme.textMuted },
+  seriesNotes: { fontSize: '13px', color: theme.textMuted, marginTop: '8px', fontStyle: 'italic' },
+  seriesActions: { display: 'flex', gap: '8px' },
+  iconBtn: { padding: '6px 12px', background: 'transparent', color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '6px', cursor: 'pointer', fontSize: '13px', transition: 'all 150ms ease-out' },
+  iconBtnDanger: { padding: '6px 12px', background: 'transparent', color: theme.textMuted, border: `1px solid ${theme.border}`, borderRadius: '6px', cursor: 'pointer', fontSize: '13px', transition: 'all 150ms ease-out' },
+  settingsForm: { maxWidth: '600px' },
+  settingRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 0', borderBottom: `1px solid ${theme.border}` },
+  settingInfo: { flex: 1 },
+  settingLabel: { fontSize: '15px', fontWeight: 500, color: theme.textPrimary },
+  settingDesc: { fontSize: '13px', color: theme.textMuted, marginTop: '2px' },
+  settingControl: { display: 'flex', alignItems: 'center', gap: '8px' },
+  numberInput: { width: '80px', padding: '10px 12px', border: `1px solid ${theme.borderInput}`, borderRadius: '8px', fontSize: '14px', textAlign: 'center' as const, background: theme.inputSurface, color: theme.textPrimary },
+  settingUnit: { fontSize: '14px', color: theme.textMuted },
+  toggleLabel: { display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' },
+  checkbox: { width: '18px', height: '18px', accentColor: theme.accent },
+  pausedLabel: { color: '#F87171', fontWeight: 500, fontSize: '14px' },
+  activeLabel: { color: '#34D399', fontWeight: 500, fontSize: '14px' },
+  reportSubtitle: { color: theme.textMuted, marginTop: '-16px', marginBottom: '24px', fontSize: '14px' },
+  reportSectionTitle: { marginTop: '32px', marginBottom: '16px', fontSize: '16px', color: theme.textPrimary, fontWeight: 600 },
+  statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' },
+  statCard: { background: theme.surfaceElevated, borderRadius: '10px', padding: '20px', textAlign: 'center' as const, border: `1px solid ${theme.border}` },
+  statValue: { fontSize: '32px', fontWeight: 700, color: theme.textPrimary },
+  statLabel: { fontSize: '13px', color: theme.textMuted, marginTop: '4px' },
+  noData: { color: theme.textMuted, fontStyle: 'italic' },
+  hostList: { display: 'flex', flexDirection: 'column', gap: '12px' },
+  hostRow: { display: 'flex', alignItems: 'center', gap: '16px' },
+  hostName: { width: '120px', fontSize: '14px', fontWeight: 500, color: theme.textPrimary },
+  hostBar: { flex: 1, height: '24px', background: theme.bg, borderRadius: '4px', overflow: 'hidden' },
+  hostBarFill: { height: '100%', background: theme.accent, borderRadius: '4px', transition: 'width 0.3s' },
+  hostCount: { width: '40px', textAlign: 'right' as const, fontSize: '14px', fontWeight: 600, color: theme.textPrimary },
+};

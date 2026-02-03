@@ -1,0 +1,189 @@
+// Auto-generated Candid interface
+// This will be replaced by dfx generate after first build
+
+type Role = variant { Admin; User };
+type UserStatus = variant { Active; Disabled };
+type Frequency = variant { Weekly; Biweekly; Monthly };
+type Weekday = variant { Mon; Tue; Wed; Thu; Fri; Sat; Sun };
+type WeekdayOrdinal = variant { First; Second; Third; Fourth; Last };
+type EventStatus = variant { Active; Cancelled };
+type NotificationType = variant {
+    HostAssigned;
+    HostRemoved;
+    InstanceTimeChanged;
+    InstanceCancelled;
+    UnclaimedReminder;
+    CoverageNeededSoon;
+    DailyDigest;
+    WeeklyDigest;
+};
+type NotificationStatus = variant { Pending; Sent; Failed };
+
+type OOOBlock = record {
+    start_utc: nat64;
+    end_utc: nat64;
+};
+
+type NotificationSettings = record {
+    email_on_assigned: bool;
+    email_on_removed: bool;
+    email_on_cancelled: bool;
+    email_on_time_changed: bool;
+    email_unclaimed_reminder: bool;
+    reminder_hours_before: opt nat32;
+};
+
+type User = record {
+    "principal": principal;
+    name: text;
+    email: text;
+    role: Role;
+    status: UserStatus;
+    out_of_office: vec OOOBlock;
+    notification_settings: NotificationSettings;
+    created_at: nat64;
+    updated_at: nat64;
+};
+
+type EventSeries = record {
+    series_id: blob;
+    title: text;
+    notes: text;
+    frequency: Frequency;
+    weekday: Weekday;
+    weekday_ordinal: opt WeekdayOrdinal;
+    start_date: nat64;
+    end_date: opt nat64;
+    default_duration_minutes: nat32;
+    created_at: nat64;
+    created_by: principal;
+};
+
+type EventInstance = record {
+    instance_id: blob;
+    series_id: opt blob;
+    start_utc: nat64;
+    end_utc: nat64;
+    title: text;
+    notes: text;
+    host_principal: opt principal;
+    status: EventStatus;
+    created_at: nat64;
+};
+
+type GlobalSettings = record {
+    forward_window_months: nat8;
+    claims_paused: bool;
+    default_event_duration_minutes: nat32;
+};
+
+type NotificationJob = record {
+    job_id: blob;
+    created_at: nat64;
+    notification_type: NotificationType;
+    recipient_principal: principal;
+    recipient_email: text;
+    subject: text;
+    body_text: text;
+    ics_payload: opt text;
+    status: NotificationStatus;
+    sent_at: opt nat64;
+    error_message: opt text;
+};
+
+type PublicEventView = record {
+    instance_id: blob;
+    title: text;
+    notes: text;
+    start_utc: nat64;
+    end_utc: nat64;
+    host_name: opt text;
+    status: EventStatus;
+};
+
+type CreateEventInput = record {
+    title: text;
+    notes: text;
+    start_utc: nat64;
+    end_utc: nat64;
+    host_principal: opt principal;
+};
+
+type CreateSeriesInput = record {
+    title: text;
+    notes: text;
+    frequency: Frequency;
+    weekday: Weekday;
+    weekday_ordinal: opt WeekdayOrdinal;
+    start_date: nat64;
+    end_date: opt nat64;
+    default_duration_minutes: opt nat32;
+};
+
+type UpdateSeriesInput = record {
+    title: opt text;
+    notes: opt text;
+    end_date: opt opt nat64;
+    default_duration_minutes: opt nat32;
+};
+
+type ApiError = variant {
+    Unauthorized;
+    NotFound;
+    InvalidInput: text;
+    Conflict: text;
+    InternalError: text;
+};
+
+type Result_User = variant { Ok: User; Err: ApiError };
+type Result_Vec_User = variant { Ok: vec User; Err: ApiError };
+type Result_Unit = variant { Ok; Err: ApiError };
+type Result_Vec_EventInstance = variant { Ok: vec EventInstance; Err: ApiError };
+type Result_EventInstance = variant { Ok: EventInstance; Err: ApiError };
+type Result_EventSeries = variant { Ok: EventSeries; Err: ApiError };
+type Result_Vec_EventSeries = variant { Ok: vec EventSeries; Err: ApiError };
+type Result_GlobalSettings = variant { Ok: GlobalSettings; Err: ApiError };
+type Result_Vec_NotificationJob = variant { Ok: vec NotificationJob; Err: ApiError };
+type Result_String = variant { Ok: text; Err: ApiError };
+
+service : {
+    // Auth / User
+    get_current_user : () -> (Result_User) query;
+    whoami : () -> (principal) query;
+    update_notification_settings : (NotificationSettings) -> (Result_Unit);
+    set_out_of_office : (vec OOOBlock) -> (Result_Unit);
+
+    // Admin - Users
+    list_users : () -> (Result_Vec_User) query;
+    authorize_user : (principal, text, text, Role) -> (Result_User);
+    disable_user : (principal) -> (Result_Unit);
+    enable_user : (principal) -> (Result_Unit);
+    update_user : (principal, text, text, Role) -> (Result_User);
+
+    // Events - Public
+    list_events_public : (nat64, nat64) -> (vec PublicEventView) query;
+
+    // Events - Authenticated
+    list_events : (nat64, nat64) -> (Result_Vec_EventInstance) query;
+    list_unclaimed_events : () -> (Result_Vec_EventInstance) query;
+    create_one_off_event : (CreateEventInput) -> (Result_EventInstance);
+
+    // Event Series (Admin)
+    create_event_series : (CreateSeriesInput) -> (Result_EventSeries);
+    update_event_series : (blob, UpdateSeriesInput) -> (Result_EventSeries);
+    delete_event_series : (blob) -> (Result_Unit);
+    list_event_series : () -> (Result_Vec_EventSeries) query;
+
+    // Coverage Queue
+    assign_host : (opt blob, opt nat64, blob, principal) -> (Result_EventInstance);
+    unassign_host : (opt blob, opt nat64, blob) -> (Result_EventInstance);
+
+    // Admin - System
+    update_global_settings : (GlobalSettings) -> (Result_Unit);
+    get_global_settings : () -> (Result_GlobalSettings) query;
+
+    // Notifications
+    list_pending_notifications : () -> (Result_Vec_NotificationJob) query;
+    mark_notification_sent : (blob) -> (Result_Unit);
+    get_event_ics : (blob) -> (Result_String) query;
+}
