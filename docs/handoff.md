@@ -1,7 +1,7 @@
 # Office Hours Scheduler – Project Handoff Document
 
-**Last Updated:** 2026-02-02 (Session 2 - Auth Flow Complete)
-**Status:** Local Deploy Working / Auth Flow Verified / Dashboard Features In Progress
+**Last Updated:** 2026-02-03 (Session 4 - Session Expiry Fix)
+**Status:** Mainnet Deployed / Session Expiry Handling Fixed / Code Pushed to GitHub
 
 ---
 
@@ -31,13 +31,13 @@ A lightweight office-hours scheduling system built on the **Internet Computer (I
 
 ---
 
-## 3. Current Deployment (Local)
+## 3. Current Deployment (Mainnet)
 
 | Canister | ID | URL |
 |----------|----|----|
-| **Frontend** | `u6s2n-gx777-77774-qaaba-cai` | http://u6s2n-gx777-77774-qaaba-cai.localhost:4943/ |
-| **Backend** | `uxrrr-q7777-77774-qaaaq-cai` | [Candid UI](http://127.0.0.1:4943/?canisterId=uzt4z-lp777-77774-qaabq-cai&id=uxrrr-q7777-77774-qaaaq-cai) |
-| **Internet Identity** | `rdmx6-jaaaa-aaaaa-aaadq-cai` | Local II |
+| **Frontend** | `6sm6t-iiaaa-aaaad-aebwq-cai` | https://6sm6t-iiaaa-aaaad-aebwq-cai.icp0.io/ |
+| **Backend** | `6vnyh-fqaaa-aaaad-aebwa-cai` | [Candid UI](https://a4gq6-oaaaa-aaaab-qaa4q-cai.raw.icp0.io/?id=6vnyh-fqaaa-aaaad-aebwa-cai) |
+| **Internet Identity** | `rdmx6-jaaaa-aaaaa-aaadq-cai` | https://id.ai |
 
 **Authorized Users:**
 1. DFX Principal (Initial Admin): `7ma2w-gqief-6zbuk-7hxgr-aehmx-imu3j-bwstx-2fvfw-jazen-6ljbd-hqe`
@@ -74,6 +74,12 @@ A lightweight office-hours scheduling system built on the **Internet Computer (I
   - "Not Authorized" page for unauthorized users ✅
   - Redirect to dashboard for authorized users ✅
   - Smart "Sign In / Go to Dashboard" button ✅
+
+### ✅ Session Expiry Handling (Session 4)
+- Detects "Invalid signature" errors from ICP boundary nodes
+- Auto-clears stale IndexedDB/localStorage auth data
+- Shows "Session Expired" page with "Sign In Again" button (instead of confusing "Not Authorized")
+- Users no longer need to manually clear browser data when delegation expires
 
 ### ✅ UI Improvements (Session 3)
 - Calendar month view - proper grid layout with weeks as rows
@@ -227,6 +233,7 @@ dfx canister call backend create_event_series '(record {
 | 2026-02-02 | 2 | ✅ | Fixed Sign In button to detect auth state |
 | 2026-02-02 | 2 | 🔄 | Building dashboard features |
 | 2026-02-03 | 3 | ✅ | Fixed calendar month view, added time picker to series, added edit button, added timezone display, connected public calendar to backend |
+| 2026-02-03 | 4 | ✅ | Fixed session expiry handling, pushed code to GitHub, deployed to mainnet |
 
 ---
 
