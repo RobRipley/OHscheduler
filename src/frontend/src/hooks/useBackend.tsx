@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useContext, createContext, ReactNode } from 'react';
 import { Actor, HttpAgent, Identity } from '@dfinity/agent';
 import { AuthClient } from '@dfinity/auth-client';
 import { Principal } from '@dfinity/principal';
@@ -58,6 +58,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'created_by': IDL.Principal,
   });
 
+
   const EventInstance = IDL.Record({
     'instance_id': IDL.Vec(IDL.Nat8),
     'series_id': IDL.Opt(IDL.Vec(IDL.Nat8)),
@@ -94,6 +95,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'end_date': IDL.Opt(IDL.Nat64),
     'default_duration_minutes': IDL.Opt(IDL.Nat32),
   });
+
 
   const UpdateSeriesInput = IDL.Record({
     'title': IDL.Opt(IDL.Text),
@@ -134,6 +136,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'enable_user': IDL.Func([IDL.Principal], [Result_Unit], []),
     'update_user': IDL.Func([IDL.Principal, IDL.Text, IDL.Text, Role], [Result_User], []),
 
+
     // Events - Authenticated
     'list_events': IDL.Func([IDL.Nat64, IDL.Nat64], [Result_Vec_EventInstance], ['query']),
     'list_unclaimed_events': IDL.Func([], [Result_Vec_EventInstance], ['query']),
@@ -165,6 +168,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'get_event_ics': IDL.Func([IDL.Vec(IDL.Nat8)], [Result_String], ['query']),
   });
 };
+
 
 // TypeScript types
 export interface User {
@@ -205,6 +209,7 @@ export interface EventInstance {
   created_at: bigint;
 }
 
+
 export interface EventSeries {
   series_id: Uint8Array | number[];
   title: string;
@@ -236,14 +241,98 @@ export interface CreateSeriesInput {
   default_duration_minutes: [number] | [];
 }
 
+
 // Backend canister ID
 const BACKEND_CANISTER_ID = import.meta.env.VITE_BACKEND_CANISTER_ID || 'uxrrr-q7777-77774-qaaaq-cai';
 
-// Singleton actor with identity
+// ==================== SESSION EXPIRY DETECTION ====================
+
+// Check if an error is a signature/session expiry error
+export function isSessionExpiredError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase();
+    return (
+      message.includes('invalid signature') ||
+      message.includes('signature could not be verified') ||
+      message.includes('certificate is not valid') ||
+      message.includes('delegation has expired') ||
+      message.includes('certificate verification failed')
+    );
+  }
+  // Also check for string-based error messages (e.g., from server responses)
+  if (typeof error === 'string') {
+    const message = error.toLowerCase();
+    return (
+      message.includes('invalid signature') ||
+      message.includes('signature could not be verified') ||
+      message.includes('certificate is not valid') ||
+      message.includes('delegation has expired')
+    );
+  }
+  return false;
+}
+
+// Clear all auth-related storage
+export async function clearAuthStorage(): Promise<void> {
+  // Clear IndexedDB databases
+  if (typeof indexedDB !== 'undefined' && indexedDB.databases) {
+    try {
+      const databases = await indexedDB.databases();
+      for (const db of databases) {
+        if (db.name && (
+          db.name.includes('auth') || 
+          db.name.includes('identity') || 
+          db.name.includes('delegation')
+        )) {
+          indexedDB.deleteDatabase(db.name);
+          console.log('[useBackend] Cleared IndexedDB:', db.name);
+        }
+      }
+    } catch (e) {
+      console.warn('[useBackend] Could not enumerate IndexedDB databases:', e);
+    }
+  }
+  
+  // Clear localStorage items
+  if (typeof localStorage !== 'undefined') {
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (
+        key.includes('auth') || 
+        key.includes('identity') || 
+        key.includes('delegation') || 
+        key.includes('ic-')
+      )) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(key => {
+      localStorage.removeItem(key);
+      console.log('[useBackend] Cleared localStorage:', key);
+    });
+  }
+}
+
+
+// ==================== BACKEND CONTEXT ====================
+
+interface BackendContextType {
+  actor: any;
+  loading: boolean;
+  sessionExpired: boolean;
+  triggerSessionExpired: () => void;
+  refreshActor: () => Promise<void>;
+  safeCall: <T>(fn: () => Promise<T>) => Promise<T>;
+}
+
+const BackendContext = createContext<BackendContextType | null>(null);
+
+// Singleton actor management
 let cachedActor: any = null;
 let cachedIdentity: Identity | null = null;
 
-async function getActor(identity?: Identity) {
+async function createActor(identity?: Identity) {
   // If identity changed, recreate actor
   if (identity && identity !== cachedIdentity) {
     cachedIdentity = identity;
@@ -275,20 +364,111 @@ async function getActor(identity?: Identity) {
   return cachedActor;
 }
 
-// Hook to get backend actor with current identity
-export function useBackend() {
+
+// ==================== BACKEND PROVIDER ====================
+
+export function BackendProvider({ children }: { children: ReactNode }) {
   const [actor, setActor] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionExpired, setSessionExpired] = useState(false);
+
+  const initActor = useCallback(async () => {
+    try {
+      const authClient = await AuthClient.create();
+      const identity = authClient.getIdentity();
+      const backendActor = await createActor(identity);
+      setActor(backendActor);
+      setSessionExpired(false);
+    } catch (err) {
+      console.error('[BackendProvider] Failed to init actor:', err);
+      if (isSessionExpiredError(err)) {
+        setSessionExpired(true);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    initActor();
+  }, [initActor]);
+
+  // Trigger session expired state (called when API calls fail with signature errors)
+  const triggerSessionExpired = useCallback(() => {
+    console.warn('[BackendProvider] Session expired detected, clearing storage...');
+    setSessionExpired(true);
+    // Clear cached actor
+    cachedActor = null;
+    cachedIdentity = null;
+    // Clear auth storage
+    clearAuthStorage();
+  }, []);
+
+
+  // Refresh actor (after re-authentication)
+  const refreshActor = useCallback(async () => {
+    setLoading(true);
+    cachedActor = null;
+    cachedIdentity = null;
+    await initActor();
+  }, [initActor]);
+
+  // Safe API call wrapper that detects session expiry
+  const safeCall = useCallback(async <T,>(fn: () => Promise<T>): Promise<T> => {
+    try {
+      return await fn();
+    } catch (error) {
+      if (isSessionExpiredError(error)) {
+        triggerSessionExpired();
+        throw new Error('Your session has expired. Please sign in again.');
+      }
+      throw error;
+    }
+  }, [triggerSessionExpired]);
+
+  return (
+    <BackendContext.Provider value={{
+      actor,
+      loading,
+      sessionExpired,
+      triggerSessionExpired,
+      refreshActor,
+      safeCall,
+    }}>
+      {children}
+    </BackendContext.Provider>
+  );
+}
+
+
+// ==================== HOOKS ====================
+
+// Main hook - use BackendProvider context if available, fallback to direct actor creation
+export function useBackend() {
+  const context = useContext(BackendContext);
+  
+  // If context is available (BackendProvider is used), return it
+  if (context) {
+    return context;
+  }
+  
+  // Fallback for backward compatibility (if BackendProvider is not used)
+  const [actor, setActor] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   useEffect(() => {
     async function init() {
       try {
         const authClient = await AuthClient.create();
         const identity = authClient.getIdentity();
-        const backendActor = await getActor(identity);
+        const backendActor = await createActor(identity);
         setActor(backendActor);
       } catch (err) {
-        console.error('Failed to init backend actor:', err);
+        console.error('[useBackend] Failed to init backend actor:', err);
+        if (isSessionExpiredError(err)) {
+          setSessionExpired(true);
+        }
       } finally {
         setLoading(false);
       }
@@ -296,8 +476,35 @@ export function useBackend() {
     init();
   }, []);
 
-  return { actor, loading };
+  const triggerSessionExpired = useCallback(() => {
+    setSessionExpired(true);
+    clearAuthStorage();
+  }, []);
+
+
+  const safeCall = useCallback(async <T,>(fn: () => Promise<T>): Promise<T> => {
+    try {
+      return await fn();
+    } catch (error) {
+      if (isSessionExpiredError(error)) {
+        triggerSessionExpired();
+        throw new Error('Your session has expired. Please sign in again.');
+      }
+      throw error;
+    }
+  }, [triggerSessionExpired]);
+
+  return { 
+    actor, 
+    loading, 
+    sessionExpired, 
+    triggerSessionExpired,
+    refreshActor: async () => {}, // No-op in fallback mode
+    safeCall,
+  };
 }
+
+// ==================== UTILITIES ====================
 
 // Utility to convert bytes to hex string for display
 export function bytesToHex(bytes: Uint8Array | number[]): string {

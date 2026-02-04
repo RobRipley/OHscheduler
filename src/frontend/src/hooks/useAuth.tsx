@@ -270,8 +270,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Clear any expired session state before attempting login
     setIsSessionExpired(false);
     
+    // Max delegation expiry: 30 days (in nanoseconds)
+    const thirtyDaysInNanoseconds = BigInt(30 * 24 * 60 * 60 * 1000 * 1000 * 1000);
+    
     await authClient.login({
       identityProvider: getIdentityProviderUrl(),
+      maxTimeToLive: thirtyDaysInNanoseconds,
       onSuccess: () => handleAuthenticated(authClient),
       onError: (error) => {
         console.error('Login failed:', error);

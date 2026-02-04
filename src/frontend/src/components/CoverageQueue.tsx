@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useBackend, EventInstance, User, nanosToDate, bytesToHex } from '../hooks/useBackend';
+import { useBackend, EventInstance, User, nanosToDate, bytesToHex, isSessionExpiredError } from '../hooks/useBackend';
 import { useAuth } from '../hooks/useAuth';
 import { Principal } from '@dfinity/principal';
 import { theme } from '../theme';
 
 export default function CoverageQueue() {
-  const { actor, loading: actorLoading } = useBackend();
+  const { actor, loading: actorLoading, triggerSessionExpired } = useBackend();
   const { user, isAdmin } = useAuth();
   const [events, setEvents] = useState<EventInstance[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -26,8 +26,13 @@ export default function CoverageQueue() {
         setError(getErrorMessage(result.Err));
       }
     } catch (err) {
-      console.error('Failed to fetch unclaimed events:', err);
-      setError('Failed to load coverage queue');
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setError('Your session has expired. Please sign in again.');
+      } else {
+        console.error('Failed to fetch unclaimed events:', err);
+        setError('Failed to load coverage queue');
+      }
     } finally {
       setLoading(false);
     }
@@ -42,7 +47,11 @@ export default function CoverageQueue() {
         setUsers(activeUsers);
       }
     } catch (err) {
-      console.error('Failed to fetch users:', err);
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+      } else {
+        console.error('Failed to fetch users:', err);
+      }
     }
   };
 
@@ -70,8 +79,13 @@ export default function CoverageQueue() {
         setError(getErrorMessage(result.Err));
       }
     } catch (err) {
-      console.error('Assignment failed:', err);
-      setError('Failed to assign host');
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setError('Your session has expired. Please sign in again.');
+      } else {
+        console.error('Assignment failed:', err);
+        setError('Failed to assign host');
+      }
     } finally {
       setAssigningId(null);
     }
@@ -95,8 +109,13 @@ export default function CoverageQueue() {
         setError(getErrorMessage(result.Err));
       }
     } catch (err) {
-      console.error('Assignment failed:', err);
-      setError('Failed to assign host');
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setError('Your session has expired. Please sign in again.');
+      } else {
+        console.error('Assignment failed:', err);
+        setError('Failed to assign host');
+      }
     } finally {
       setAssigningId(null);
     }

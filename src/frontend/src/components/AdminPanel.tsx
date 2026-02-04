@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, NavLink } from 'react-router-dom';
-import { useBackend, User, EventSeries, GlobalSettings, nanosToDate, bytesToHex, dateToNanos, CreateSeriesInput } from '../hooks/useBackend';
+import { useBackend, User, EventSeries, GlobalSettings, nanosToDate, bytesToHex, dateToNanos, CreateSeriesInput, isSessionExpiredError } from '../hooks/useBackend';
 import { useAuth } from '../hooks/useAuth';
 import { Principal } from '@dfinity/principal';
 import { theme } from '../theme';
@@ -47,7 +47,7 @@ const tabStyle = ({ isActive }: { isActive: boolean }) => ({
 
 // ============== USER MANAGEMENT ==============
 function UserManagement() {
-  const { actor, loading: actorLoading } = useBackend();
+  const { actor, loading: actorLoading, triggerSessionExpired } = useBackend();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +62,12 @@ function UserManagement() {
       if ('Ok' in result) setUsers(result.Ok);
       else setError(getErrorMessage(result.Err));
     } catch (err) {
-      setError('Failed to load users');
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setError('Your session has expired. Please sign in again.');
+      } else {
+        setError('Failed to load users');
+      }
     } finally {
       setLoading(false);
     }
@@ -83,7 +88,12 @@ function UserManagement() {
       if ('Ok' in result) fetchUsers();
       else setError(getErrorMessage(result.Err));
     } catch (err) {
-      setError('Failed to update user status');
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setError('Your session has expired. Please sign in again.');
+      } else {
+        setError('Failed to update user status');
+      }
     } finally {
       setActionLoading(null);
     }
@@ -100,7 +110,7 @@ function UserManagement() {
         </button>
       </div>
       {error && <div style={styles.error}>{error}</div>}
-      {showAddForm && <AddUserForm actor={actor} onSuccess={() => { setShowAddForm(false); fetchUsers(); }} onCancel={() => setShowAddForm(false)} />}
+      {showAddForm && <AddUserForm actor={actor} triggerSessionExpired={triggerSessionExpired} onSuccess={() => { setShowAddForm(false); fetchUsers(); }} onCancel={() => setShowAddForm(false)} />}
       <div style={styles.tableContainer}>
         <table style={styles.table}>
           <thead>
@@ -138,7 +148,7 @@ function UserManagement() {
   );
 }
 
-function AddUserForm({ actor, onSuccess, onCancel }: { actor: any; onSuccess: () => void; onCancel: () => void }) {
+function AddUserForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { actor: any; triggerSessionExpired: () => void; onSuccess: () => void; onCancel: () => void }) {
   const [principal, setPrincipal] = useState('');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -158,7 +168,12 @@ function AddUserForm({ actor, onSuccess, onCancel }: { actor: any; onSuccess: ()
       if ('Ok' in result) onSuccess();
       else setError(getErrorMessage(result.Err));
     } catch (err: any) {
-      setError(err.message || 'Invalid principal format');
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setError('Your session has expired. Please sign in again.');
+      } else {
+        setError(err.message || 'Invalid principal format');
+      }
     } finally {
       setLoading(false);
     }
@@ -179,7 +194,7 @@ function AddUserForm({ actor, onSuccess, onCancel }: { actor: any; onSuccess: ()
 
 // ============== EVENT SERIES MANAGEMENT ==============
 function EventSeriesManagement() {
-  const { actor, loading: actorLoading } = useBackend();
+  const { actor, loading: actorLoading, triggerSessionExpired } = useBackend();
   const [series, setSeries] = useState<EventSeries[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -195,7 +210,12 @@ function EventSeriesManagement() {
       if ('Ok' in result) setSeries(result.Ok);
       else setError(getErrorMessage(result.Err));
     } catch (err) {
-      setError('Failed to load event series');
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setError('Your session has expired. Please sign in again.');
+      } else {
+        setError('Failed to load event series');
+      }
     } finally {
       setLoading(false);
     }
@@ -216,7 +236,12 @@ function EventSeriesManagement() {
       if ('Ok' in result) fetchSeries();
       else setError(getErrorMessage(result.Err));
     } catch (err) {
-      setError('Failed to delete series');
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setError('Your session has expired. Please sign in again.');
+      } else {
+        setError('Failed to delete series');
+      }
     } finally {
       setDeletingId(null);
     }
@@ -255,7 +280,8 @@ function EventSeriesManagement() {
       {error && <div style={styles.error}>{error}</div>}
       {showAddForm && (
         <AddSeriesForm 
-          actor={actor} 
+          actor={actor}
+          triggerSessionExpired={triggerSessionExpired}
           onSuccess={() => { setShowAddForm(false); fetchSeries(); }} 
           onCancel={() => setShowAddForm(false)} 
         />
@@ -263,6 +289,7 @@ function EventSeriesManagement() {
       {editingSeries && (
         <EditSeriesForm
           actor={actor}
+          triggerSessionExpired={triggerSessionExpired}
           series={editingSeries}
           onSuccess={() => { setEditingSeries(null); fetchSeries(); }}
           onCancel={() => setEditingSeries(null)}
@@ -305,7 +332,7 @@ function EventSeriesManagement() {
   );
 }
 
-function AddSeriesForm({ actor, onSuccess, onCancel }: { actor: any; onSuccess: () => void; onCancel: () => void }) {
+function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { actor: any; triggerSessionExpired: () => void; onSuccess: () => void; onCancel: () => void }) {
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
   const [frequency, setFrequency] = useState<'Weekly' | 'Biweekly' | 'Monthly'>('Weekly');
@@ -343,7 +370,12 @@ function AddSeriesForm({ actor, onSuccess, onCancel }: { actor: any; onSuccess: 
       if ('Ok' in result) onSuccess();
       else setError(getErrorMessage(result.Err));
     } catch (err: any) {
-      setError(err.message || 'Failed to create series');
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setError('Your session has expired. Please sign in again.');
+      } else {
+        setError(err.message || 'Failed to create series');
+      }
     } finally {
       setLoading(false);
     }
@@ -369,7 +401,7 @@ function AddSeriesForm({ actor, onSuccess, onCancel }: { actor: any; onSuccess: 
   );
 }
 
-function EditSeriesForm({ actor, series, onSuccess, onCancel }: { actor: any; series: EventSeries; onSuccess: () => void; onCancel: () => void }) {
+function EditSeriesForm({ actor, triggerSessionExpired, series, onSuccess, onCancel }: { actor: any; triggerSessionExpired: () => void; series: EventSeries; onSuccess: () => void; onCancel: () => void }) {
   const [title, setTitle] = useState(series.title);
   const [notes, setNotes] = useState(series.notes);
   const [endDate, setEndDate] = useState(series.end_date.length > 0 ? nanosToDate(series.end_date[0] as bigint).toISOString().split('T')[0] : '');
@@ -393,7 +425,12 @@ function EditSeriesForm({ actor, series, onSuccess, onCancel }: { actor: any; se
       if ('Ok' in result) onSuccess();
       else setError(getErrorMessage(result.Err));
     } catch (err: any) {
-      setError(err.message || 'Failed to update series');
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setError('Your session has expired. Please sign in again.');
+      } else {
+        setError(err.message || 'Failed to update series');
+      }
     } finally {
       setLoading(false);
     }
@@ -424,7 +461,7 @@ function EditSeriesForm({ actor, series, onSuccess, onCancel }: { actor: any; se
 
 // ============== SYSTEM SETTINGS ==============
 function SystemSettings() {
-  const { actor, loading: actorLoading } = useBackend();
+  const { actor, loading: actorLoading, triggerSessionExpired } = useBackend();
   const [settings, setSettings] = useState<GlobalSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -440,7 +477,12 @@ function SystemSettings() {
         if ('Ok' in result) setSettings(result.Ok);
         else setError(getErrorMessage(result.Err));
       } catch (err) {
-        setError('Failed to load settings');
+        if (isSessionExpiredError(err)) {
+          triggerSessionExpired();
+          setError('Your session has expired. Please sign in again.');
+        } else {
+          setError('Failed to load settings');
+        }
       } finally {
         setLoading(false);
       }
@@ -458,7 +500,12 @@ function SystemSettings() {
       if ('Ok' in result) { setSuccess(true); setTimeout(() => setSuccess(false), 3000); }
       else setError(getErrorMessage(result.Err));
     } catch (err) {
-      setError('Failed to save settings');
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setError('Your session has expired. Please sign in again.');
+      } else {
+        setError('Failed to save settings');
+      }
     } finally {
       setSaving(false);
     }
@@ -497,10 +544,11 @@ function SystemSettings() {
 
 // ============== REPORTS ==============
 function Reports() {
-  const { actor, loading: actorLoading } = useBackend();
+  const { actor, loading: actorLoading, triggerSessionExpired } = useBackend();
   const [events, setEvents] = useState<any[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!actor || actorLoading) return;
@@ -514,7 +562,12 @@ function Reports() {
         if ('Ok' in eventsResult) setEvents(eventsResult.Ok);
         if ('Ok' in usersResult) setUsers(usersResult.Ok);
       } catch (err) {
-        console.error('Failed to fetch report data:', err);
+        if (isSessionExpiredError(err)) {
+          triggerSessionExpired();
+          setError('Your session has expired. Please sign in again.');
+        } else {
+          console.error('Failed to fetch report data:', err);
+        }
       } finally {
         setLoading(false);
       }
@@ -523,6 +576,7 @@ function Reports() {
   }, [actor, actorLoading]);
 
   if (actorLoading || loading) return <div style={styles.loading}>Loading report data...</div>;
+  if (error) return <div style={styles.error}>{error}</div>;
 
   const totalEvents = events.length;
   const assignedEvents = events.filter(e => e.host_principal.length > 0).length;

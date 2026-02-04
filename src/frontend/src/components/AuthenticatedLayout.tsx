@@ -1,23 +1,50 @@
 import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useBackend } from '../hooks/useBackend';
 import Calendar from './Calendar';
 import CoverageQueue from './CoverageQueue';
 import AdminPanel from './AdminPanel';
 import { theme } from '../theme';
 
 export default function AuthenticatedLayout() {
-  const { user, isAdmin, logout, principal } = useAuth();
+  const { user, isAdmin, logout, principal, login, isSessionExpired: authSessionExpired, clearExpiredSession } = useAuth();
+  const { sessionExpired: backendSessionExpired } = useBackend();
   const navigate = useNavigate();
   
   const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  
+  // Session is expired if either auth or backend detects it
+  const sessionExpired = authSessionExpired || backendSessionExpired;
   
   const handleLogout = async () => {
     await logout();
     navigate('/');
   };
-  
+
+  const handleReAuthenticate = async () => {
+    // Clear expired session data first
+    await clearExpiredSession();
+    // Attempt to log in again
+    await login();
+  };
+
   return (
     <div style={styles.container}>
+      {/* Session Expired Banner */}
+      {sessionExpired && (
+        <div style={styles.sessionExpiredBanner}>
+          <div style={styles.sessionExpiredContent}>
+            <span style={styles.sessionExpiredIcon}>⚠️</span>
+            <span style={styles.sessionExpiredText}>
+              Your session has expired. Please sign in again to continue.
+            </span>
+            <button onClick={handleReAuthenticate} style={styles.reAuthButton}>
+              Sign In
+            </button>
+          </div>
+        </div>
+      )}
+      
       <header style={styles.header}>
         <div style={styles.headerContent}>
           <h1 style={styles.logo}>Office Hours</h1>
@@ -81,6 +108,38 @@ const styles: { [key: string]: React.CSSProperties } = {
   container: {
     minHeight: '100vh',
     background: theme.bg,
+  },
+  sessionExpiredBanner: {
+    background: 'rgba(251, 146, 60, 0.15)',
+    borderBottom: '1px solid rgba(251, 146, 60, 0.3)',
+    padding: '12px 20px',
+  },
+  sessionExpiredContent: {
+    maxWidth: '1200px',
+    margin: '0 auto',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+  },
+  sessionExpiredIcon: {
+    fontSize: '16px',
+  },
+  sessionExpiredText: {
+    color: '#FB923C',
+    fontSize: '14px',
+    fontWeight: 500,
+    flex: 1,
+  },
+  reAuthButton: {
+    padding: '8px 16px',
+    background: '#FB923C',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: 500,
+    transition: 'background 150ms ease-out',
   },
   header: {
     background: theme.surface,

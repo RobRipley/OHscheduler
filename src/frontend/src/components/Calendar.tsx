@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useBackend, EventInstance, nanosToDate, dateToNanos, bytesToHex, User } from '../hooks/useBackend';
+import { useBackend, EventInstance, nanosToDate, dateToNanos, bytesToHex, User, isSessionExpiredError } from '../hooks/useBackend';
 import { useAuth } from '../hooks/useAuth';
 import { theme } from '../theme';
 
@@ -8,7 +8,7 @@ interface CalendarEvent extends EventInstance {
 }
 
 export default function Calendar() {
-  const { actor, loading: actorLoading } = useBackend();
+  const { actor, loading: actorLoading, triggerSessionExpired } = useBackend();
   const { user } = useAuth();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,8 +57,13 @@ export default function Calendar() {
           setError(getErrorMessage(result.Err));
         }
       } catch (err) {
-        console.error('Failed to fetch events:', err);
-        setError('Failed to load events');
+        if (isSessionExpiredError(err)) {
+          triggerSessionExpired();
+          setError('Your session has expired. Please sign in again.');
+        } else {
+          console.error('Failed to fetch events:', err);
+          setError('Failed to load events');
+        }
       } finally {
         setLoading(false);
       }
@@ -77,7 +82,11 @@ export default function Calendar() {
           setUsers(userMap);
         }
       } catch (err) {
-        console.error('Failed to fetch users:', err);
+        if (isSessionExpiredError(err)) {
+          triggerSessionExpired();
+        } else {
+          console.error('Failed to fetch users:', err);
+        }
       }
     }
     fetchUsers();
@@ -316,6 +325,7 @@ export default function Calendar() {
           hostName={getHostName(selectedEvent.host_principal)}
           currentUser={user}
           actor={actor}
+          triggerSessionExpired={triggerSessionExpired}
           users={users}
           onClose={() => setSelectedEvent(null)}
           onRefresh={() => { setSelectedEvent(null); refreshEvents(); }}
@@ -330,12 +340,13 @@ interface EventDetailModalProps {
   hostName: string;
   currentUser: any;
   actor: any;
+  triggerSessionExpired: () => void;
   users: Map<string, User>;
   onClose: () => void;
   onRefresh: () => void;
 }
 
-function EventDetailModal({ event, hostName, currentUser, actor, onClose, onRefresh }: EventDetailModalProps) {
+function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionExpired, onClose, onRefresh }: EventDetailModalProps) {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [icsLoading, setIcsLoading] = useState(false);
@@ -358,7 +369,12 @@ function EventDetailModal({ event, hostName, currentUser, actor, onClose, onRefr
       if ('Ok' in result) onRefresh();
       else setActionError(getErrorMessage(result.Err));
     } catch (err) {
-      setActionError('Failed to assign host');
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setActionError('Your session has expired. Please sign in again.');
+      } else {
+        setActionError('Failed to assign host');
+      }
     } finally {
       setActionLoading(false);
     }
@@ -376,7 +392,12 @@ function EventDetailModal({ event, hostName, currentUser, actor, onClose, onRefr
       if ('Ok' in result) onRefresh();
       else setActionError(getErrorMessage(result.Err));
     } catch (err) {
-      setActionError('Failed to remove host');
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setActionError('Your session has expired. Please sign in again.');
+      } else {
+        setActionError('Failed to remove host');
+      }
     } finally {
       setActionLoading(false);
     }
@@ -398,7 +419,12 @@ function EventDetailModal({ event, hostName, currentUser, actor, onClose, onRefr
         setActionError('Failed to generate calendar file');
       }
     } catch (err) {
-      setActionError('Failed to download calendar file');
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setActionError('Your session has expired. Please sign in again.');
+      } else {
+        setActionError('Failed to download calendar file');
+      }
     } finally {
       setIcsLoading(false);
     }
