@@ -1,7 +1,7 @@
 # Office Hours Scheduler – Project Handoff Document
 
-**Last Updated:** 2026-02-03 (Session 4 - Session Expiry Fix)
-**Status:** Mainnet Deployed / Session Expiry Handling Fixed / Code Pushed to GitHub
+**Last Updated:** 2026-02-04 (Session 5 - Comprehensive Session Expiry Handling)
+**Status:** Mainnet Deployed / Session Expiry Auto-Recovery Implemented / Code Pushed to GitHub
 
 ---
 
@@ -75,11 +75,14 @@ A lightweight office-hours scheduling system built on the **Internet Computer (I
   - Redirect to dashboard for authorized users ✅
   - Smart "Sign In / Go to Dashboard" button ✅
 
-### ✅ Session Expiry Handling (Session 4)
-- Detects "Invalid signature" errors from ICP boundary nodes
-- Auto-clears stale IndexedDB/localStorage auth data
-- Shows "Session Expired" page with "Sign In Again" button (instead of confusing "Not Authorized")
-- Users no longer need to manually clear browser data when delegation expires
+### ✅ Session Expiry Handling (Session 4 & 5)
+- Detects "Invalid signature" / "EcdsaP256 signature could not be verified" errors
+- **Comprehensive coverage:** All API call catch blocks now check for session expiry
+- Auto-clears stale IndexedDB/localStorage auth data via `clearAuthStorage()`
+- Shows session expired banner at top of dashboard with "Sign In" button
+- `triggerSessionExpired()` passed to all components making API calls
+- Components updated: AdminPanel, Calendar, CoverageQueue (all forms and modals)
+- Users no longer need to manually clear browser data when delegation expires overnight
 
 ### ✅ UI Improvements (Session 3)
 - Calendar month view - proper grid layout with weeks as rows
@@ -234,6 +237,7 @@ dfx canister call backend create_event_series '(record {
 | 2026-02-02 | 2 | 🔄 | Building dashboard features |
 | 2026-02-03 | 3 | ✅ | Fixed calendar month view, added time picker to series, added edit button, added timezone display, connected public calendar to backend |
 | 2026-02-03 | 4 | ✅ | Fixed session expiry handling, pushed code to GitHub, deployed to mainnet |
+| 2026-02-04 | 5 | ✅ | Comprehensive session expiry detection across all components, auto-recovery with banner UI |
 
 ---
 
