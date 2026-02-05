@@ -40,6 +40,15 @@ export default function PublicCalendar() {
 
   const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+  // Redirect to dashboard after successful login
+  useEffect(() => {
+    if (isAuthenticated && isAuthorized) {
+      navigate('/dashboard');
+    } else if (isAuthenticated && !isAuthorized) {
+      navigate('/not-authorized');
+    }
+  }, [isAuthenticated, isAuthorized, navigate]);
+
   useEffect(() => {
     async function fetchEvents() {
       setLoading(true);
