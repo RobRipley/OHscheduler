@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useBackend, EventInstance, User, nanosToDate, bytesToHex, isSessionExpiredError } from '../hooks/useBackend';
 import { useAuth } from '../hooks/useAuth';
+import { useTimezone } from '../hooks/useTimezone';
 import { Principal } from '@dfinity/principal';
 import { theme } from '../theme';
 
@@ -26,53 +27,12 @@ interface Toast {
   type: 'success' | 'error';
 }
 
-// ==================== TIMEZONE CONTEXT ====================
-
-// Get stored timezone or default to user's local
-function getStoredTimezone(): string {
-  return localStorage.getItem('ohscheduler_timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone;
-}
-
-function setStoredTimezone(tz: string): void {
-  localStorage.setItem('ohscheduler_timezone', tz);
-}
-
-// Common timezones for the selector
-const COMMON_TIMEZONES = [
-  'America/New_York',
-  'America/Chicago', 
-  'America/Denver',
-  'America/Los_Angeles',
-  'America/Anchorage',
-  'Pacific/Honolulu',
-  'Europe/London',
-  'Europe/Paris',
-  'Europe/Berlin',
-  'Asia/Tokyo',
-  'Asia/Shanghai',
-  'Asia/Singapore',
-  'Australia/Sydney',
-  'UTC',
-];
-
-function getTimezoneAbbrev(tz: string, date: Date = new Date()): string {
-  try {
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: tz,
-      timeZoneName: 'short',
-    }).formatToParts(date);
-    const tzPart = parts.find(p => p.type === 'timeZoneName');
-    return tzPart?.value || tz.split('/').pop() || tz;
-  } catch {
-    return tz.split('/').pop() || tz;
-  }
-}
-
 // ==================== MAIN COMPONENT ====================
 
 export default function CoverageQueue() {
   const { actor, loading: actorLoading, triggerSessionExpired } = useBackend();
   const { user, isAdmin } = useAuth();
+  const { timezone, abbrev } = useTimezone();
   
   // Core state
   const [events, setEvents] = useState<EventInstance[]>([]);
@@ -86,13 +46,10 @@ export default function CoverageQueue() {
   const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const [notesEditor, setNotesEditor] = useState<NotesEditorState | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [displayTimezone, setDisplayTimezone] = useState(getStoredTimezone);
-  const [showTzSelector, setShowTzSelector] = useState(false);
   
   // Refs
   const popoverRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const tzSelectorRef = useRef<HTMLDivElement>(null);
 
   // ==================== DATA FETCHING ====================
 
@@ -277,9 +234,6 @@ export default function CoverageQueue() {
       if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
         closeAssignPopover();
       }
-      if (tzSelectorRef.current && !tzSelectorRef.current.contains(e.target as Node)) {
-        setShowTzSelector(false);
-      }
     };
     
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -346,7 +300,7 @@ export default function CoverageQueue() {
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
-      timeZone: displayTimezone,
+      timeZone: timezone,
     });
   };
 
@@ -357,14 +311,8 @@ export default function CoverageQueue() {
       weekday: 'long',
       month: 'long',
       day: 'numeric',
-      timeZone: displayTimezone,
+      timeZone: timezone,
     });
-  };
-
-  const handleTimezoneChange = (tz: string) => {
-    setDisplayTimezone(tz);
-    setStoredTimezone(tz);
-    setShowTzSelector(false);
   };
 
   // ==================== GROUPED EVENTS ====================
@@ -372,7 +320,7 @@ export default function CoverageQueue() {
   const groupedEvents = events.reduce((acc, event) => {
     const date = nanosToDate(event.start_utc);
     // Format in display timezone
-    const dateKey = date.toLocaleDateString('en-CA', { timeZone: displayTimezone }); // YYYY-MM-DD format
+    const dateKey = date.toLocaleDateString('en-CA', { timeZone: timezone }); // YYYY-MM-DD format
     if (!acc[dateKey]) acc[dateKey] = [];
     acc[dateKey].push(event);
     return acc;
@@ -413,33 +361,6 @@ export default function CoverageQueue() {
           <p style={styles.subtitle}>Sessions that need a host assigned</p>
         </div>
         <div style={styles.headerActions}>
-          {/* Timezone Selector */}
-          <div style={styles.tzSelectorWrapper} ref={tzSelectorRef}>
-            <button 
-              style={styles.tzButton}
-              onClick={() => setShowTzSelector(!showTzSelector)}
-            >
-              {getTimezoneAbbrev(displayTimezone)} ▾
-            </button>
-            {showTzSelector && (
-              <div style={styles.tzDropdown}>
-                {COMMON_TIMEZONES.map(tz => (
-                  <button
-                    key={tz}
-                    style={{
-                      ...styles.tzOption,
-                      ...(tz === displayTimezone ? styles.tzOptionActive : {}),
-                    }}
-                    onClick={() => handleTimezoneChange(tz)}
-                  >
-                    <span>{tz.replace('_', ' ').split('/').pop()}</span>
-                    <span style={styles.tzAbbrev}>{getTimezoneAbbrev(tz)}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          
           <button style={styles.refreshBtn} onClick={fetchEvents} disabled={loading}>
             Refresh
           </button>
@@ -482,7 +403,7 @@ export default function CoverageQueue() {
                           {formatTimeInZone(event.start_utc)}
                           {' – '}
                           {formatTimeInZone(event.end_utc)}
-                          <span style={styles.tzIndicator}>{getTimezoneAbbrev(displayTimezone)}</span>
+                          <span style={styles.tzIndicator}>{abbrev}</span>
                         </div>
                         <span style={styles.needsHostBadge}>Needs Host</span>
                       </div>
@@ -709,60 +630,6 @@ const styles: { [key: string]: React.CSSProperties } = {
     display: 'flex',
     gap: '8px',
     alignItems: 'center',
-  },
-  
-  // Timezone selector
-  tzSelectorWrapper: {
-    position: 'relative',
-  },
-  tzButton: {
-    padding: '8px 12px',
-    background: theme.surface,
-    color: theme.textSecondary,
-    border: `1px solid ${theme.border}`,
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-  },
-  tzDropdown: {
-    position: 'absolute',
-    top: '100%',
-    right: 0,
-    marginTop: '4px',
-    background: theme.surfaceElevated,
-    border: `1px solid ${theme.border}`,
-    borderRadius: '8px',
-    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
-    zIndex: 200,
-    minWidth: '200px',
-    maxHeight: '300px',
-    overflowY: 'auto',
-    padding: '4px',
-  },
-  tzOption: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
-    padding: '10px 12px',
-    background: 'transparent',
-    border: 'none',
-    borderRadius: '6px',
-    color: theme.textSecondary,
-    fontSize: '13px',
-    cursor: 'pointer',
-    textAlign: 'left',
-  },
-  tzOptionActive: {
-    background: theme.accentFocus,
-    color: theme.textPrimary,
-  },
-  tzAbbrev: {
-    color: theme.textMuted,
-    fontSize: '12px',
   },
   
   refreshBtn: {
