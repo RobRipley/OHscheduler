@@ -330,12 +330,16 @@ const BackendContext = createContext<BackendContextType | null>(null);
 
 // Singleton actor management
 let cachedActor: any = null;
-let cachedIdentity: Identity | null = null;
+let cachedIdentityPrincipal: string | null = null;
 
 async function createActor(identity?: Identity) {
-  // If identity changed, recreate actor
-  if (identity && identity !== cachedIdentity) {
-    cachedIdentity = identity;
+  // Get the principal string for comparison
+  const currentPrincipal = identity ? identity.getPrincipal().toText() : 'anonymous';
+  
+  // If identity changed (different principal), recreate actor
+  if (currentPrincipal !== cachedIdentityPrincipal) {
+    console.log('[createActor] Identity changed, recreating actor. Old:', cachedIdentityPrincipal, 'New:', currentPrincipal);
+    cachedIdentityPrincipal = currentPrincipal;
     cachedActor = null;
   }
   
@@ -395,13 +399,13 @@ export function BackendProvider({ children }: { children: ReactNode }) {
 
   // Trigger session expired state (called when API calls fail with signature errors)
   const triggerSessionExpired = useCallback(() => {
-    console.warn('[BackendProvider] Session expired detected, clearing storage...');
+    console.warn('[BackendProvider] Session expired detected, clearing cached actor...');
     setSessionExpired(true);
-    // Clear cached actor
+    // Clear cached actor so it gets recreated with fresh identity
     cachedActor = null;
-    cachedIdentity = null;
-    // Clear auth storage
-    clearAuthStorage();
+    cachedIdentityPrincipal = null;
+    // NOTE: Don't clear auth storage here - let useAuth handle that during re-login
+    // Clearing here was causing a loop where fresh logins would have their storage cleared
   }, []);
 
 
@@ -409,7 +413,7 @@ export function BackendProvider({ children }: { children: ReactNode }) {
   const refreshActor = useCallback(async () => {
     setLoading(true);
     cachedActor = null;
-    cachedIdentity = null;
+    cachedIdentityPrincipal = null;
     await initActor();
   }, [initActor]);
 
@@ -478,7 +482,10 @@ export function useBackend() {
 
   const triggerSessionExpired = useCallback(() => {
     setSessionExpired(true);
-    clearAuthStorage();
+    // Clear cached actor so it gets recreated with fresh identity
+    cachedActor = null;
+    cachedIdentityPrincipal = null;
+    // NOTE: Don't clear auth storage here - let useAuth handle it
   }, []);
 
 
