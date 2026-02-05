@@ -199,6 +199,7 @@ export default function PublicCalendar() {
                               ...styles.eventCard,
                               ...(isNoHost ? styles.eventNoHost : styles.eventAssigned),
                             }}>
+                              <div style={styles.eventTitle}>{event.title}</div>
                               <div style={styles.eventTime}>{formatTime(event.start_utc)}</div>
                               <div style={isNoHost ? styles.eventHostNoHost : styles.eventHost}>
                                 {hostName}
@@ -257,7 +258,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   weekHeader: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: theme.surfaceElevated, borderBottom: `1px solid ${theme.border}` },
   weekHeaderCell: { padding: '12px 8px', textAlign: 'center', fontSize: '11px', fontWeight: 600, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' },
   weekRow: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: `1px solid ${theme.border}` },
-  dayCell: { minHeight: '120px', padding: '8px', borderRight: `1px solid ${theme.border}`, background: theme.surface },
+  dayCell: { minHeight: '220px', padding: '8px', borderRight: `1px solid ${theme.border}`, background: theme.surface },
   todayCell: { background: theme.surfaceElevated },
   outsideMonth: { background: theme.bg, opacity: 0.5 },
   dayCellHeader: { marginBottom: '8px' },
@@ -268,9 +269,10 @@ const styles: { [key: string]: React.CSSProperties } = {
   eventCard: { padding: '6px 8px', borderRadius: '6px', borderLeft: '3px solid' },
   eventAssigned: { background: 'rgba(99, 102, 241, 0.15)', borderLeftColor: theme.accent },
   eventNoHost: { background: 'rgba(248, 113, 113, 0.15)', borderLeftColor: '#F87171' },
-  eventTime: { fontSize: '11px', fontWeight: 600, color: theme.textSecondary, marginBottom: '2px' },
-  eventHost: { fontSize: '12px', fontWeight: 500, color: theme.accent },
-  eventHostNoHost: { fontSize: '12px', fontWeight: 500, color: '#F87171' },
+  eventTitle: { fontSize: '12px', fontWeight: 600, color: theme.textPrimary, marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  eventTime: { fontSize: '11px', fontWeight: 500, color: theme.textSecondary, marginBottom: '1px' },
+  eventHost: { fontSize: '11px', fontWeight: 500, color: theme.accent },
+  eventHostNoHost: { fontSize: '11px', fontWeight: 500, color: '#F87171' },
   moreEvents: { fontSize: '11px', color: theme.textMuted, padding: '4px 8px' },
   
   footer: { textAlign: 'center', padding: '20px', color: theme.textMuted, fontSize: '13px', borderTop: `1px solid ${theme.border}` },

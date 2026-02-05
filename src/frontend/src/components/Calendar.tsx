@@ -258,6 +258,7 @@ export default function Calendar() {
                             }}
                             onClick={() => setSelectedEvent(event)}
                           >
+                            <div style={styles.monthEventTitle}>{event.title}</div>
                             <div style={styles.monthEventTime}>
                               {nanosToDate(event.start_utc).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
                             </div>
@@ -346,17 +347,27 @@ interface EventDetailModalProps {
   onRefresh: () => void;
 }
 
-function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionExpired, onClose, onRefresh }: EventDetailModalProps) {
+function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionExpired, users, onClose, onRefresh }: EventDetailModalProps) {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [icsLoading, setIcsLoading] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
 
   const isHost = event.host_principal.length > 0 && currentUser?.principal?.toText() === event.host_principal[0]?.toText();
   const isNoHost = event.host_principal.length === 0;
   const isCancelled = 'Cancelled' in event.status;
 
+  // Get list of active users for dropdown
+  const activeUsers = Array.from(users.values()).filter(u => 'Active' in u.status);
+
   const handleAssignHost = async () => {
-    if (!currentUser) return;
+    if (!selectedUserId) {
+      setActionError('Please select a host');
+      return;
+    }
+    const selectedUser = users.get(selectedUserId);
+    if (!selectedUser) return;
+    
     setActionLoading(true);
     setActionError(null);
     try {
@@ -364,7 +375,7 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
         event.series_id.length > 0 ? [event.series_id[0]] : [],
         event.series_id.length > 0 ? [event.start_utc] : [],
         event.instance_id,
-        currentUser.principal
+        selectedUser.principal
       );
       if ('Ok' in result) onRefresh();
       else setActionError(getErrorMessage(result.Err));
@@ -461,13 +472,27 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
         {actionError && <div style={modalStyles.error}>{actionError}</div>}
         <div style={modalStyles.actions}>
           {!isCancelled && isNoHost && (
-            <button style={modalStyles.primaryBtn} onClick={handleAssignHost} disabled={actionLoading}>
-              {actionLoading ? 'Saving...' : 'Assign host'}
-            </button>
+            <div style={modalStyles.assignSection}>
+              <select
+                style={modalStyles.userSelect}
+                value={selectedUserId}
+                onChange={e => setSelectedUserId(e.target.value)}
+              >
+                <option value="">Select a host...</option>
+                {activeUsers.map(u => (
+                  <option key={u.principal.toText()} value={u.principal.toText()}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+              <button style={modalStyles.primaryBtn} onClick={handleAssignHost} disabled={actionLoading || !selectedUserId}>
+                {actionLoading ? 'Saving...' : 'Assign host'}
+              </button>
+            </div>
           )}
           {!isCancelled && isHost && (
             <button style={modalStyles.secondaryBtn} onClick={handleRemoveHost} disabled={actionLoading}>
-              {actionLoading ? 'Removing...' : 'Remove host'}
+              {actionLoading ? 'Removing...' : 'Remove myself'}
             </button>
           )}
           {!isCancelled && event.host_principal.length > 0 && (
@@ -510,7 +535,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   weekHeader: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: theme.surfaceElevated, borderBottom: `1px solid ${theme.border}` },
   weekHeaderCell: { padding: '12px 8px', textAlign: 'center', fontSize: '11px', fontWeight: 600, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' },
   weekRow: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: `1px solid ${theme.border}` },
-  dayCell: { minHeight: '120px', padding: '8px', borderRight: `1px solid ${theme.border}`, background: theme.surface },
+  dayCell: { minHeight: '220px', padding: '8px', borderRight: `1px solid ${theme.border}`, background: theme.surface },
   todayCell: { background: theme.surfaceElevated },
   outsideMonth: { background: theme.bg, opacity: 0.5 },
   dayCellHeader: { marginBottom: '8px' },
@@ -521,9 +546,10 @@ const styles: { [key: string]: React.CSSProperties } = {
   monthEventCard: { padding: '6px 8px', borderRadius: '6px', cursor: 'pointer', borderLeft: '3px solid' },
   monthEventAssigned: { background: 'rgba(99, 102, 241, 0.15)', borderLeftColor: theme.accent },
   monthEventNoHost: { background: 'rgba(248, 113, 113, 0.15)', borderLeftColor: '#F87171' },
-  monthEventTime: { fontSize: '11px', fontWeight: 600, color: theme.textSecondary, marginBottom: '2px' },
-  monthEventHost: { fontSize: '12px', fontWeight: 500, color: theme.accent },
-  monthEventHostNoHost: { fontSize: '12px', fontWeight: 500, color: '#F87171' },
+  monthEventTitle: { fontSize: '12px', fontWeight: 600, color: theme.textPrimary, marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  monthEventTime: { fontSize: '11px', fontWeight: 500, color: theme.textSecondary, marginBottom: '1px' },
+  monthEventHost: { fontSize: '11px', fontWeight: 500, color: theme.accent },
+  monthEventHostNoHost: { fontSize: '11px', fontWeight: 500, color: '#F87171' },
   moreEvents: { fontSize: '11px', color: theme.textMuted, padding: '4px 8px' },
 
   // Week view
@@ -556,6 +582,8 @@ const modalStyles: { [key: string]: React.CSSProperties } = {
   detailValue: { fontSize: '15px', color: theme.textPrimary },
   error: { background: 'rgba(248, 113, 113, 0.1)', color: '#F87171', padding: '10px 12px', borderRadius: '8px', marginTop: '16px', fontSize: '14px', border: '1px solid rgba(248, 113, 113, 0.2)' },
   actions: { marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '10px' },
+  assignSection: { display: 'flex', gap: '10px', alignItems: 'stretch' },
+  userSelect: { flex: 1, padding: '12px 14px', background: theme.inputSurface, color: theme.textPrimary, border: `1px solid ${theme.borderInput}`, borderRadius: '8px', fontSize: '14px', cursor: 'pointer', outline: 'none' },
   primaryBtn: { padding: '12px 20px', background: theme.accent, color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500, transition: 'background 150ms ease-out' },
   secondaryBtn: { padding: '12px 20px', background: 'transparent', color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500, transition: 'all 150ms ease-out' },
 };

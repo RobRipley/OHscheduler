@@ -4,6 +4,7 @@ import { useBackend } from '../hooks/useBackend';
 import Calendar from './Calendar';
 import CoverageQueue from './CoverageQueue';
 import AdminPanel from './AdminPanel';
+import NotificationBell from './NotificationBell';
 import { theme } from '../theme';
 
 export default function AuthenticatedLayout() {
@@ -81,6 +82,7 @@ export default function AuthenticatedLayout() {
             )}
           </nav>
           <div style={styles.userSection}>
+            <NotificationBell />
             <span style={styles.timezone}>{userTimezone}</span>
             <span style={styles.userName}>
               {user?.name || principal?.toText().slice(0, 8) + '...'}

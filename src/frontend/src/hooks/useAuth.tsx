@@ -46,12 +46,22 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
 };
 
 // Types for user data
+interface NotificationSettings {
+  email_on_assigned: boolean;
+  email_on_removed: boolean;
+  email_on_cancelled: boolean;
+  email_on_time_changed: boolean;
+  email_unclaimed_reminder: boolean;
+  reminder_hours_before: [number] | [];
+}
+
 interface User {
   principal: Principal;
   name: string;
   email: string;
   role: { Admin: null } | { User: null };
   status: { Active: null } | { Disabled: null };
+  notification_settings: NotificationSettings;
 }
 
 interface AuthContextType {

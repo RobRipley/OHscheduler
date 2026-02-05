@@ -1,7 +1,7 @@
 # Office Hours Scheduler – Project Handoff Document
 
-**Last Updated:** 2026-02-04 (Session 5 - Comprehensive Session Expiry Handling)
-**Status:** Mainnet Deployed / Session Expiry Auto-Recovery Implemented / Code Pushed to GitHub
+**Last Updated:** 2026-02-04 (Session 6 - Calendar Height + Notification Bell)
+**Status:** Mainnet Deployed / In-App Notifications Implemented / Ready for Deploy
 
 ---
 
@@ -83,6 +83,18 @@ A lightweight office-hours scheduling system built on the **Internet Computer (I
 - `triggerSessionExpired()` passed to all components making API calls
 - Components updated: AdminPanel, Calendar, CoverageQueue (all forms and modals)
 - Users no longer need to manually clear browser data when delegation expires overnight
+
+### ✅ Calendar & Notifications (Session 6)
+- Calendar day cells expanded from 160px to 220px minHeight for better event visibility
+- Events now display title, time, AND host clearly
+- Public calendar also updated with same height
+- Assign Host modal now features user dropdown (select any user, not just self-assign)
+- **NotificationBell component** implemented with:
+  - Bell icon in header with unread count badge
+  - Dropdown showing upcoming sessions (within 24 hours where user is host)
+  - Coverage needed alerts for unclaimed events
+  - Mark as read / Mark all read functionality
+  - Auto-refresh every 5 minutes
 
 ### ✅ UI Improvements (Session 3)
 - Calendar month view - proper grid layout with weeks as rows
@@ -238,6 +250,7 @@ dfx canister call backend create_event_series '(record {
 | 2026-02-03 | 3 | ✅ | Fixed calendar month view, added time picker to series, added edit button, added timezone display, connected public calendar to backend |
 | 2026-02-03 | 4 | ✅ | Fixed session expiry handling, pushed code to GitHub, deployed to mainnet |
 | 2026-02-04 | 5 | ✅ | Comprehensive session expiry detection across all components, auto-recovery with banner UI |
+| 2026-02-04 | 6 | ✅ | Calendar height expanded (160px→220px), NotificationBell component, Assign Host dropdown, TypeScript fixes |
 
 ---
 
