@@ -78,18 +78,6 @@ export default function NotAuthorized() {
             Sign out
           </button>
         </div>
-        
-        <div style={styles.adminNote}>
-          <strong>For Admins:</strong> Use the following command to authorize this user:
-          <pre style={styles.codeBlock}>
-{`dfx canister call backend authorize_user '(
-  principal "${principalText}",
-  "User Name",
-  "email@example.com",
-  variant { User }
-)' --network ic`}
-          </pre>
-        </div>
       </div>
     </div>
   );
@@ -210,24 +198,5 @@ const styles: { [key: string]: React.CSSProperties } = {
     cursor: 'pointer',
     fontWeight: 500,
     transition: 'all 150ms ease-out',
-  },
-  adminNote: {
-    background: theme.surfaceElevated,
-    padding: '16px',
-    borderRadius: '10px',
-    fontSize: '13px',
-    color: theme.textSecondary,
-    border: `1px solid ${theme.border}`,
-  },
-  codeBlock: {
-    background: theme.bg,
-    color: theme.textPrimary,
-    padding: '12px',
-    borderRadius: '8px',
-    marginTop: '8px',
-    fontSize: '12px',
-    overflow: 'auto',
-    whiteSpace: 'pre-wrap',
-    border: `1px solid ${theme.border}`,
   },
 };
