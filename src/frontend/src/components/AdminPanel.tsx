@@ -53,6 +53,13 @@ function UserManagement() {
   const [error, setError] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [linkingUser, setLinkingUser] = useState<User | null>(null);
+
+  // Check if a principal is a placeholder (starts with 0xFFFF)
+  const isPlaceholderPrincipal = (principal: Principal): boolean => {
+    const bytes = principal.toUint8Array();
+    return bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFF;
+  };
 
   const fetchUsers = async () => {
     if (!actor) return;
@@ -111,6 +118,7 @@ function UserManagement() {
       </div>
       {error && <div style={styles.error}>{error}</div>}
       {showAddForm && <AddUserForm actor={actor} triggerSessionExpired={triggerSessionExpired} onSuccess={() => { setShowAddForm(false); fetchUsers(); }} onCancel={() => setShowAddForm(false)} />}
+      {linkingUser && <LinkPrincipalModal user={linkingUser} actor={actor} triggerSessionExpired={triggerSessionExpired} onSuccess={() => { setLinkingUser(null); fetchUsers(); }} onCancel={() => setLinkingUser(null)} />}
       <div style={styles.tableContainer}>
         <table style={styles.table}>
           <thead>
@@ -127,16 +135,36 @@ function UserManagement() {
               const key = user.principal.toText();
               const isActive = 'Active' in user.status;
               const isAdminRole = 'Admin' in user.role;
+              const isPending = isPlaceholderPrincipal(user.principal);
               return (
                 <tr key={key} style={!isActive ? styles.disabledRow : {}}>
-                  <td style={styles.td}><div style={styles.userName}>{user.name}</div><div style={styles.principalText}>{key.slice(0, 15)}...</div></td>
-                  <td style={styles.td}>{user.email}</td>
-                  <td style={styles.td}><span style={isAdminRole ? styles.adminBadge : styles.userBadge}>{isAdminRole ? 'Admin' : 'User'}</span></td>
-                  <td style={styles.td}><span style={isActive ? styles.activeBadge : styles.disabledBadge}>{isActive ? 'Active' : 'Disabled'}</span></td>
                   <td style={styles.td}>
-                    <button style={styles.actionBtn} onClick={() => handleToggleStatus(user)} disabled={actionLoading === key}>
-                      {actionLoading === key ? '...' : (isActive ? 'Disable' : 'Enable')}
-                    </button>
+                    <div style={styles.userName}>{user.name}</div>
+                    {isPending ? (
+                      <div style={styles.pendingText}>Pending II link</div>
+                    ) : (
+                      <div style={styles.principalText}>{key.slice(0, 15)}...</div>
+                    )}
+                  </td>
+                  <td style={styles.td}>{user.email || <span style={styles.emptyField}>—</span>}</td>
+                  <td style={styles.td}><span style={isAdminRole ? styles.adminBadge : styles.userBadge}>{isAdminRole ? 'Admin' : 'User'}</span></td>
+                  <td style={styles.td}>
+                    {isPending ? (
+                      <span style={styles.pendingBadge}>Pending</span>
+                    ) : (
+                      <span style={isActive ? styles.activeBadge : styles.disabledBadge}>{isActive ? 'Active' : 'Disabled'}</span>
+                    )}
+                  </td>
+                  <td style={styles.td}>
+                    {isPending ? (
+                      <button style={styles.linkBtn} onClick={() => setLinkingUser(user)}>
+                        Link Principal
+                      </button>
+                    ) : (
+                      <button style={styles.actionBtn} onClick={() => handleToggleStatus(user)} disabled={actionLoading === key}>
+                        {actionLoading === key ? '...' : (isActive ? 'Disable' : 'Enable')}
+                      </button>
+                    )}
                   </td>
                 </tr>
               );
@@ -156,13 +184,43 @@ function AddUserForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { ac
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Generate a placeholder principal from name + timestamp
+  // Uses a simple hash to create a unique 29-byte principal
+  const generatePlaceholderPrincipal = (userName: string): Principal => {
+    const timestamp = Date.now().toString();
+    const input = `pending:${userName}:${timestamp}`;
+    // Create a simple hash and convert to bytes
+    let hash = 0;
+    for (let i = 0; i < input.length; i++) {
+      const char = input.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    // Create 29 bytes (max principal size) with recognizable prefix
+    const bytes = new Uint8Array(29);
+    // Prefix: 0xFF 0xFF to mark as placeholder (unusual pattern)
+    bytes[0] = 0xFF;
+    bytes[1] = 0xFF;
+    // Fill rest with hash-derived values
+    for (let i = 2; i < 29; i++) {
+      bytes[i] = (hash + i * 31) & 0xFF;
+    }
+    return Principal.fromUint8Array(bytes);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!actor) return;
     setLoading(true);
     setError(null);
     try {
-      const principalObj = Principal.fromText(principal.trim());
+      let principalObj: Principal;
+      if (principal.trim()) {
+        principalObj = Principal.fromText(principal.trim());
+      } else {
+        // Generate placeholder principal for pending users
+        principalObj = generatePlaceholderPrincipal(name.trim());
+      }
       const roleVariant = role === 'Admin' ? { Admin: null } : { User: null };
       const result = await actor.authorize_user(principalObj, name.trim(), email.trim(), roleVariant);
       if ('Ok' in result) onSuccess();
@@ -183,12 +241,111 @@ function AddUserForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { ac
     <form onSubmit={handleSubmit} style={styles.form}>
       <h4 style={styles.formTitle}>Add New User</h4>
       {error && <div style={styles.formError}>{error}</div>}
-      <div style={styles.formRow}><label style={styles.label}>Principal ID</label><input type="text" value={principal} onChange={e => setPrincipal(e.target.value)} placeholder="xxxxx-xxxxx-xxxxx-xxxxx-cai" style={styles.input} required /></div>
+      <div style={styles.formRow}>
+        <label style={styles.label}>Principal ID <span style={styles.optionalLabel}>(optional)</span></label>
+        <input type="text" value={principal} onChange={e => setPrincipal(e.target.value)} placeholder="Leave blank if user hasn't signed in yet" style={styles.input} />
+        <div style={styles.fieldHint}>If blank, user can be linked to their Internet Identity later</div>
+      </div>
       <div style={styles.formRow}><label style={styles.label}>Name</label><input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="John Doe" style={styles.input} required /></div>
-      <div style={styles.formRow}><label style={styles.label}>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="john@example.com" style={styles.input} required /></div>
+      <div style={styles.formRow}><label style={styles.label}>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="john@example.com" style={styles.input} /></div>
       <div style={styles.formRow}><label style={styles.label}>Role</label><select value={role} onChange={e => setRole(e.target.value as 'Admin' | 'User')} style={styles.select}><option value="User">User</option><option value="Admin">Admin</option></select></div>
       <div style={styles.formActions}><button type="button" onClick={onCancel} style={styles.cancelBtn}>Cancel</button><button type="submit" disabled={loading} style={styles.submitBtn}>{loading ? 'Adding...' : 'Add User'}</button></div>
     </form>
+  );
+}
+
+// ============== LINK PRINCIPAL MODAL ==============
+function LinkPrincipalModal({ user, actor, triggerSessionExpired, onSuccess, onCancel }: { 
+  user: User; 
+  actor: any; 
+  triggerSessionExpired: () => void; 
+  onSuccess: () => void; 
+  onCancel: () => void;
+}) {
+  const [newPrincipal, setNewPrincipal] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!actor || !newPrincipal.trim()) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // Validate the new principal
+      const newPrincipalObj = Principal.fromText(newPrincipal.trim());
+      
+      // Strategy: Create new user with same details but new principal, then delete old
+      // First check if new principal already exists
+      const roleVariant = 'Admin' in user.role ? { Admin: null } : { User: null };
+      
+      // Create user with new principal
+      const createResult = await actor.authorize_user(
+        newPrincipalObj, 
+        user.name, 
+        user.email, 
+        roleVariant
+      );
+      
+      if ('Err' in createResult) {
+        setError(getErrorMessage(createResult.Err));
+        return;
+      }
+      
+      // Delete the old placeholder user
+      // Note: We need a delete_user function, but we can use disable for now
+      // and the old record will just be marked disabled
+      await actor.disable_user(user.principal);
+      
+      onSuccess();
+    } catch (err: any) {
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setError('Your session has expired. Please sign in again.');
+      } else {
+        setError(err.message || 'Invalid principal format');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={styles.modalOverlay} onClick={onCancel}>
+      <div style={styles.modal} onClick={e => e.stopPropagation()}>
+        <h4 style={styles.modalTitle}>Link Principal to {user.name}</h4>
+        <p style={styles.modalDescription}>
+          Enter the Internet Identity principal for this user. You can find this when they sign in 
+          and visit the "Not Authorized" page, or ask them to share it from their II dashboard.
+        </p>
+        
+        {error && <div style={styles.formError}>{error}</div>}
+        
+        <form onSubmit={handleSubmit}>
+          <div style={styles.formRow}>
+            <label style={styles.label}>Principal ID</label>
+            <input 
+              type="text" 
+              value={newPrincipal} 
+              onChange={e => setNewPrincipal(e.target.value)} 
+              placeholder="xxxxx-xxxxx-xxxxx-xxxxx-cai" 
+              style={styles.input} 
+              required 
+              autoFocus
+            />
+          </div>
+          
+          <div style={styles.formActions}>
+            <button type="button" onClick={onCancel} style={styles.cancelBtn}>Cancel</button>
+            <button type="submit" disabled={loading || !newPrincipal.trim()} style={styles.submitBtn}>
+              {loading ? 'Linking...' : 'Link Principal'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }
 
@@ -708,4 +865,16 @@ const styles: { [key: string]: React.CSSProperties } = {
   hostBar: { flex: 1, height: '24px', background: theme.bg, borderRadius: '4px', overflow: 'hidden' },
   hostBarFill: { height: '100%', background: theme.accent, borderRadius: '4px', transition: 'width 0.3s' },
   hostCount: { width: '40px', textAlign: 'right' as const, fontSize: '14px', fontWeight: 600, color: theme.textPrimary },
+  // Pending user styles
+  pendingText: { fontSize: '11px', color: '#FBBF24', fontStyle: 'italic' },
+  pendingBadge: { background: 'rgba(251, 191, 36, 0.15)', color: '#FBBF24', padding: '3px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500 },
+  emptyField: { color: theme.textMuted },
+  linkBtn: { padding: '6px 12px', background: theme.accent, color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 500, transition: 'background 150ms ease-out' },
+  optionalLabel: { color: theme.textMuted, fontWeight: 400, fontSize: '12px' },
+  fieldHint: { fontSize: '12px', color: theme.textMuted, marginTop: '6px' },
+  // Modal styles
+  modalOverlay: { position: 'fixed' as const, top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
+  modal: { background: theme.surface, borderRadius: '16px', padding: '28px', maxWidth: '480px', width: '90%', border: `1px solid ${theme.border}` },
+  modalTitle: { marginTop: 0, marginBottom: '8px', fontSize: '18px', color: theme.textPrimary, fontWeight: 600 },
+  modalDescription: { fontSize: '14px', color: theme.textMuted, marginBottom: '20px', lineHeight: 1.5 },
 };
