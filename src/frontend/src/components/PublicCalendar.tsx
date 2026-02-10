@@ -138,20 +138,21 @@ export default function PublicCalendar() {
 
   return (
     <div style={styles.container}>
-      <header style={styles.header}>
-        <div style={styles.headerContent}>
-          <h1 style={styles.title}>Office Hours</h1>
-          <p style={styles.subtitle}>Public Calendar</p>
-          <div style={styles.headerMeta}>
+      <main style={styles.main}>
+        {/* Compact header row aligned with calendar */}
+        <div style={styles.headerRow}>
+          <div style={styles.titleGroup}>
+            <span style={styles.title}>Office Hours</span>
+            <span style={styles.subtitle}>Public Calendar</span>
+          </div>
+          <div style={styles.headerControls}>
             <span style={styles.timezone}>{userTimezone}</span>
             <button onClick={handleSignIn} style={styles.loginButton}>
-              {isAuthenticated && isAuthorized ? 'Go to Dashboard' : 'Sign In'}
+              {isAuthenticated && isAuthorized ? 'Dashboard' : 'Sign In'}
             </button>
           </div>
         </div>
-      </header>
-      
-      <main style={styles.main}>
+
         <div style={styles.monthNav}>
           <button 
             onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
@@ -235,10 +236,6 @@ export default function PublicCalendar() {
           </div>
         )}
       </main>
-      
-      <footer style={styles.footer}>
-        <p>Powered by Internet Computer</p>
-      </footer>
     </div>
   );
 }
@@ -246,17 +243,20 @@ export default function PublicCalendar() {
 
 const styles: { [key: string]: React.CSSProperties } = {
   container: { minHeight: '100vh', display: 'flex', flexDirection: 'column', background: theme.bg },
-  header: { background: theme.surface, borderBottom: `1px solid ${theme.border}`, padding: '40px 20px' },
-  headerContent: { maxWidth: '1100px', margin: '0 auto', textAlign: 'center' },
-  title: { fontSize: '28px', fontWeight: 600, margin: 0, color: theme.textPrimary },
-  subtitle: { color: theme.textMuted, marginTop: '8px', fontSize: '14px' },
-  headerMeta: { display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', marginTop: '20px', flexWrap: 'wrap' },
-  timezone: { fontSize: '12px', color: theme.textMuted, background: theme.bg, padding: '6px 12px', borderRadius: '6px', border: `1px solid ${theme.border}` },
-  loginButton: { padding: '10px 20px', color: '#fff', background: theme.accent, border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500, transition: 'background 150ms ease-out' },
   main: { flex: 1, maxWidth: '1100px', margin: '0 auto', padding: '24px 20px', width: '100%' },
-  monthNav: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' },
-  navButton: { padding: '10px 20px', background: theme.surface, color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '8px', cursor: 'pointer', fontSize: '14px', transition: 'all 150ms ease-out' },
-  monthTitle: { fontSize: '20px', fontWeight: 600, margin: 0, color: theme.textPrimary },
+  
+  // Compact header row
+  headerRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
+  titleGroup: { display: 'flex', alignItems: 'baseline', gap: '8px' },
+  title: { fontSize: '20px', fontWeight: 600, color: theme.textPrimary },
+  subtitle: { fontSize: '15px', fontStyle: 'italic', color: theme.textMuted },
+  headerControls: { display: 'flex', alignItems: 'center', gap: '12px' },
+  timezone: { fontSize: '12px', color: theme.textMuted, background: theme.surface, padding: '6px 12px', borderRadius: '6px', border: `1px solid ${theme.border}` },
+  loginButton: { padding: '8px 16px', color: '#fff', background: theme.accent, border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500, transition: 'background 150ms ease-out' },
+  
+  monthNav: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' },
+  navButton: { padding: '8px 16px', background: theme.surface, color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '8px', cursor: 'pointer', fontSize: '14px', transition: 'all 150ms ease-out' },
+  monthTitle: { fontSize: '18px', fontWeight: 600, margin: 0, color: theme.textPrimary },
   loading: { textAlign: 'center', padding: '60px 20px', color: theme.textMuted, background: theme.surface, borderRadius: '12px', border: `1px solid ${theme.border}` },
   empty: { textAlign: 'center', padding: '60px 20px', background: theme.surface, borderRadius: '12px', marginTop: '20px', border: `1px solid ${theme.border}` },
   emptyText: { color: theme.textSecondary, margin: 0, fontSize: '15px' },
@@ -267,7 +267,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   weekHeader: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: theme.surfaceElevated, borderBottom: `1px solid ${theme.border}` },
   weekHeaderCell: { padding: '12px 8px', textAlign: 'center', fontSize: '11px', fontWeight: 600, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' },
   weekRow: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: `1px solid ${theme.border}` },
-  dayCell: { minHeight: '220px', padding: '8px', borderRight: `1px solid ${theme.border}`, background: theme.surface },
+  dayCell: { minHeight: '140px', padding: '8px', borderRight: `1px solid ${theme.border}`, background: theme.surface },
   todayCell: { background: theme.surfaceElevated },
   outsideMonth: { background: theme.bg, opacity: 0.5 },
   dayCellHeader: { marginBottom: '8px' },
@@ -283,6 +283,4 @@ const styles: { [key: string]: React.CSSProperties } = {
   eventHost: { fontSize: '11px', fontWeight: 500, color: theme.accent },
   eventHostNoHost: { fontSize: '11px', fontWeight: 500, color: '#F87171' },
   moreEvents: { fontSize: '11px', color: theme.textMuted, padding: '4px 8px' },
-  
-  footer: { textAlign: 'center', padding: '20px', color: theme.textMuted, fontSize: '13px', borderTop: `1px solid ${theme.border}` },
 };

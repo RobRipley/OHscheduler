@@ -535,7 +535,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   weekHeader: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: theme.surfaceElevated, borderBottom: `1px solid ${theme.border}` },
   weekHeaderCell: { padding: '12px 8px', textAlign: 'center', fontSize: '11px', fontWeight: 600, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' },
   weekRow: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: `1px solid ${theme.border}` },
-  dayCell: { minHeight: '220px', padding: '8px', borderRight: `1px solid ${theme.border}`, background: theme.surface },
+  dayCell: { minHeight: '140px', padding: '8px', borderRight: `1px solid ${theme.border}`, background: theme.surface },
   todayCell: { background: theme.surfaceElevated },
   outsideMonth: { background: theme.bg, opacity: 0.5 },
   dayCellHeader: { marginBottom: '8px' },
