@@ -292,6 +292,7 @@ pub fn materialize_events(window_start: u64, window_end: u64) -> Vec<EventInstan
                 notes,
                 host_principal,
                 status: EventStatus::Active,
+                color: series.color.clone(),
                 created_at: series.created_at,
             });
         }

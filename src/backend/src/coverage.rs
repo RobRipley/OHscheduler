@@ -237,6 +237,7 @@ fn get_event_instance(
             notes,
             host_principal,
             status: EventStatus::Active,
+            color: series.color,
             created_at: series.created_at,
         })
     } else {

@@ -131,6 +131,7 @@ pub struct EventSeries {
     pub start_date: u64,
     pub end_date: Option<u64>,
     pub default_duration_minutes: u32,
+    pub color: Option<String>,  // Optional color code (e.g., "blue", "orange", "#FF5733")
     pub created_at: u64,
     pub created_by: Principal,
 }
@@ -145,6 +146,7 @@ pub struct EventInstance {
     pub notes: String,
     pub host_principal: Option<Principal>,
     pub status: EventStatus,
+    pub color: Option<String>,  // Inherited from series
     pub created_at: u64,
 }
 
@@ -226,6 +228,7 @@ pub struct CreateSeriesInput {
     pub start_date: u64,
     pub end_date: Option<u64>,
     pub default_duration_minutes: Option<u32>,
+    pub color: Option<String>,
 }
 
 
@@ -235,6 +238,7 @@ pub struct UpdateSeriesInput {
     pub notes: Option<String>,
     pub end_date: Option<Option<u64>>,
     pub default_duration_minutes: Option<u32>,
+    pub color: Option<Option<String>>,  // None = don't change, Some(None) = clear, Some(Some(x)) = set to x
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
@@ -254,6 +258,7 @@ pub struct PublicEventView {
     pub end_utc: u64,
     pub host_name: Option<String>,
     pub status: EventStatus,
+    pub color: Option<String>,
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug)]

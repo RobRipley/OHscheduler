@@ -196,6 +196,7 @@ fn list_events_public(window_start: u64, window_end: u64) -> Vec<PublicEventView
             end_utc: e.end_utc,
             host_name,
             status: e.status,
+            color: e.color,
         }
     }).collect()
 }
@@ -237,6 +238,7 @@ fn create_one_off_event(input: CreateEventInput) -> ApiResult<EventInstance> {
         notes: input.notes,
         host_principal: input.host_principal,
         status: EventStatus::Active,
+        color: None,  // One-off events don't have a color (could add to CreateEventInput later)
         created_at: now,
     };
     
@@ -274,6 +276,7 @@ fn create_event_series(input: CreateSeriesInput) -> ApiResult<EventSeries> {
         end_date: input.end_date,
         default_duration_minutes: input.default_duration_minutes
             .unwrap_or(settings.default_event_duration_minutes),
+        color: input.color,
         created_at: now,
         created_by: admin.principal,
     };
@@ -304,6 +307,9 @@ fn update_event_series(series_id: Vec<u8>, input: UpdateSeriesInput) -> ApiResul
     }
     if let Some(duration) = input.default_duration_minutes {
         series.default_duration_minutes = duration;
+    }
+    if let Some(color) = input.color {
+        series.color = color;
     }
     
     storage::insert_series(series.clone());
