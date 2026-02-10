@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Actor, HttpAgent } from '@dfinity/agent';
 import { useAuth } from '../hooks/useAuth';
+import { TIMEZONE_LIST, getTimezoneAbbrev } from '../hooks/useTimezone';
 import { theme } from '../theme';
 
 const BACKEND_CANISTER_ID = import.meta.env.VITE_BACKEND_CANISTER_ID || 'uxrrr-q7777-77774-qaaaq-cai';
@@ -38,7 +39,55 @@ export default function PublicCalendar() {
   const { isAuthenticated, isAuthorized, login } = useAuth();
   const navigate = useNavigate();
 
-  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // Timezone state — defaults to browser timezone
+  const [timezone, setTimezone] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const [showTzSelector, setShowTzSelector] = useState(false);
+  const [tzSearch, setTzSearch] = useState('');
+  const tzRef = useRef<HTMLDivElement>(null);
+
+  const abbrev = getTimezoneAbbrev(timezone);
+
+  const filteredTimezones = useMemo(() => {
+    const search = tzSearch.toLowerCase().trim();
+    if (!search) return TIMEZONE_LIST;
+    return TIMEZONE_LIST.filter(t => {
+      const labelLower = t.label.toLowerCase();
+      const tzLower = t.tz.toLowerCase().replace(/_/g, ' ');
+      const aliasMatch = t.aliases.some(a => a.includes(search));
+      return labelLower.includes(search) || tzLower.includes(search) || aliasMatch;
+    });
+  }, [tzSearch]);
+
+  // Close tz dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (tzRef.current && !tzRef.current.contains(e.target as Node)) {
+        setShowTzSelector(false);
+        setTzSearch('');
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Timezone-aware helpers
+  const getDateKeyInTz = (nanos: bigint) => {
+    const d = new Date(Number(nanos / BigInt(1_000_000)));
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).formatToParts(d);
+    const year = parts.find(p => p.type === 'year')?.value;
+    const month = parts.find(p => p.type === 'month')?.value;
+    const day = parts.find(p => p.type === 'day')?.value;
+    return `${year}-${month}-${day}`;
+  };
+
+  const formatTime = (nanos: bigint) => {
+    return new Date(Number(nanos / BigInt(1_000_000))).toLocaleTimeString('en-US', { 
+      hour: 'numeric', 
+      minute: '2-digit',
+      hour12: true,
+      timeZone: timezone,
+    });
+  };
 
   // Redirect to dashboard after successful login
   useEffect(() => {
@@ -94,13 +143,13 @@ export default function PublicCalendar() {
   const eventsByDate = useMemo(() => {
     const grouped = new Map<string, PublicEvent[]>();
     events.forEach(event => {
-      const dateKey = new Date(Number(event.start_utc / BigInt(1_000_000))).toISOString().split('T')[0];
+      const dateKey = getDateKeyInTz(event.start_utc);
       const existing = grouped.get(dateKey) || [];
       existing.push(event);
       grouped.set(dateKey, existing);
     });
     return grouped;
-  }, [events]);
+  }, [events, timezone]);
 
   const calendarGrid = useMemo(() => {
     const weeks: Date[][] = [];
@@ -125,28 +174,58 @@ export default function PublicCalendar() {
     return weeks;
   }, [currentMonth]);
 
-  const formatTime = (nanos: bigint) => {
-    return new Date(Number(nanos / BigInt(1_000_000))).toLocaleTimeString('en-US', { 
-      hour: 'numeric', 
-      minute: '2-digit',
-      hour12: true 
-    });
-  };
-
-  const todayKey = new Date().toISOString().split('T')[0];
+  const todayKey = getDateKeyInTz(BigInt(Date.now()) * BigInt(1_000_000));
   const isCurrentMonth = (date: Date) => date.getMonth() === currentMonth.getMonth();
 
   return (
     <div style={styles.container}>
       <main style={styles.main}>
-        {/* Compact header row aligned with calendar */}
         <div style={styles.headerRow}>
           <div style={styles.titleGroup}>
             <span style={styles.title}>Office Hours</span>
             <span style={styles.subtitle}>Public Calendar</span>
           </div>
           <div style={styles.headerControls}>
-            <span style={styles.timezone}>{userTimezone}</span>
+            <div style={styles.tzWrapper} ref={tzRef}>
+              <button
+                style={styles.tzButton}
+                onClick={() => setShowTzSelector(!showTzSelector)}
+                title={`Display timezone: ${timezone}`}
+              >
+                {abbrev} ▾
+              </button>
+              {showTzSelector && (
+                <div style={styles.tzDropdown}>
+                  <div style={styles.tzDropdownHeader}>Display Timezone</div>
+                  <input
+                    type="text"
+                    placeholder="Search (e.g. PST, London, GMT+5)..."
+                    value={tzSearch}
+                    onChange={(e) => setTzSearch(e.target.value)}
+                    style={styles.tzSearchInput}
+                    autoFocus
+                  />
+                  <div style={styles.tzList}>
+                    {filteredTimezones.map(t => (
+                      <button
+                        key={t.tz}
+                        style={{
+                          ...styles.tzOption,
+                          ...(t.tz === timezone ? styles.tzOptionActive : {}),
+                        }}
+                        onClick={() => { setTimezone(t.tz); setShowTzSelector(false); setTzSearch(''); }}
+                      >
+                        <span>{t.label}</span>
+                        <span style={styles.tzAbbrev}>{getTimezoneAbbrev(t.tz)}</span>
+                      </button>
+                    ))}
+                    {filteredTimezones.length === 0 && (
+                      <div style={styles.tzNoResults}>No timezones found</div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
             <button onClick={handleSignIn} style={styles.loginButton}>
               {isAuthenticated && isAuthorized ? 'Dashboard' : 'Sign In'}
             </button>
@@ -245,24 +324,33 @@ const styles: { [key: string]: React.CSSProperties } = {
   container: { minHeight: '100vh', display: 'flex', flexDirection: 'column', background: theme.bg },
   main: { flex: 1, maxWidth: '1100px', margin: '0 auto', padding: '24px 20px', width: '100%' },
   
-  // Compact header row
   headerRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
   titleGroup: { display: 'flex', alignItems: 'baseline', gap: '8px' },
   title: { fontSize: '20px', fontWeight: 600, color: theme.textPrimary },
   subtitle: { fontSize: '15px', fontStyle: 'italic', color: theme.textMuted },
   headerControls: { display: 'flex', alignItems: 'center', gap: '12px' },
-  timezone: { fontSize: '12px', color: theme.textMuted, background: theme.surface, padding: '6px 12px', borderRadius: '6px', border: `1px solid ${theme.border}` },
-  loginButton: { padding: '8px 16px', color: '#fff', background: theme.accent, border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500, transition: 'background 150ms ease-out' },
+  loginButton: { padding: '8px 16px', color: '#fff', background: theme.accent, border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500 },
+  
+  // Timezone selector
+  tzWrapper: { position: 'relative' },
+  tzButton: { padding: '6px 12px', background: theme.surface, color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '6px', cursor: 'pointer', fontSize: '13px' },
+  tzDropdown: { position: 'absolute', top: '100%', right: 0, marginTop: '6px', background: theme.surfaceElevated, border: `1px solid ${theme.border}`, borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.4)', zIndex: 200, minWidth: '260px', display: 'flex', flexDirection: 'column' },
+  tzDropdownHeader: { padding: '10px 12px 8px', fontSize: '11px', fontWeight: 600, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: `1px solid ${theme.border}` },
+  tzSearchInput: { margin: '8px', padding: '6px 10px', background: theme.inputSurface, color: theme.textPrimary, border: `1px solid ${theme.borderInput}`, borderRadius: '6px', fontSize: '13px', outline: 'none' },
+  tzList: { maxHeight: '280px', overflowY: 'auto' },
+  tzOption: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', padding: '10px 12px', background: 'transparent', border: 'none', color: theme.textSecondary, fontSize: '13px', cursor: 'pointer', textAlign: 'left' },
+  tzOptionActive: { background: theme.accentFocus, color: theme.textPrimary },
+  tzAbbrev: { color: theme.textMuted, fontSize: '11px' },
+  tzNoResults: { padding: '12px', textAlign: 'center', fontSize: '13px', color: theme.textMuted },
   
   monthNav: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' },
-  navButton: { padding: '8px 16px', background: theme.surface, color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '8px', cursor: 'pointer', fontSize: '14px', transition: 'all 150ms ease-out' },
+  navButton: { padding: '8px 16px', background: theme.surface, color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '8px', cursor: 'pointer', fontSize: '14px' },
   monthTitle: { fontSize: '18px', fontWeight: 600, margin: 0, color: theme.textPrimary },
   loading: { textAlign: 'center', padding: '60px 20px', color: theme.textMuted, background: theme.surface, borderRadius: '12px', border: `1px solid ${theme.border}` },
   empty: { textAlign: 'center', padding: '60px 20px', background: theme.surface, borderRadius: '12px', marginTop: '20px', border: `1px solid ${theme.border}` },
   emptyText: { color: theme.textSecondary, margin: 0, fontSize: '15px' },
   emptyHint: { color: theme.textMuted, fontSize: '13px', marginTop: '8px' },
   
-  // Calendar
   calendar: { background: theme.surface, borderRadius: '12px', overflow: 'hidden', border: `1px solid ${theme.border}` },
   weekHeader: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: theme.surfaceElevated, borderBottom: `1px solid ${theme.border}` },
   weekHeaderCell: { padding: '12px 8px', textAlign: 'center', fontSize: '11px', fontWeight: 600, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' },

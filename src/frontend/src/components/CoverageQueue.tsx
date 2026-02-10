@@ -89,9 +89,14 @@ export default function CoverageQueue() {
     setAssigningId(eventKey);
     
     try {
+      // series_id comes from Candid as opt blob: [] for None, [Uint8Array] for Some
+      const seriesId = event.series_id;
+      // occurrence_start is opt nat64: pass [start_utc] if series event, [] if one-off
+      const occurrenceStart = (seriesId && seriesId.length > 0) ? [event.start_utc] : [];
+      
       const result = await actor.assign_host(
-        event.series_id ? [event.series_id] : [],
-        event.series_id ? [event.start_utc] : [],
+        seriesId,
+        occurrenceStart,
         event.instance_id,
         Principal.fromText(hostPrincipal)
       );
@@ -188,71 +193,69 @@ export default function CoverageQueue() {
             
             return (
               <div key={eventKey} style={styles.card}>
-                {/* Header row: date + badge */}
-                <div style={styles.cardHeader}>
+                {/* Left: event info */}
+                <div style={styles.cardLeft}>
                   <span style={styles.dateText}>
                     {formatDateInZone(nanosToDate(event.start_utc))}
                   </span>
+                  <div style={styles.eventTitle}>{event.title}</div>
+                  <div style={styles.eventTime}>
+                    {formatTimeInZone(event.start_utc)} – {formatTimeInZone(event.end_utc)}
+                    <span style={styles.tzLabel}>{abbrev}</span>
+                  </div>
+                </div>
+                
+                {/* Middle: notes (if any) */}
+                {event.notes && (
+                  <div style={styles.notesMid}>{event.notes}</div>
+                )}
+                
+                {/* Right: badge + assign controls */}
+                <div style={styles.cardRight}>
                   <span style={isCovered ? styles.coveredBadge : styles.needsHostBadge}>
                     {isCovered ? 'Covered' : 'Needs Host'}
                   </span>
-                </div>
-                
-                {/* Event details */}
-                <div style={styles.eventTitle}>{event.title}</div>
-                <div style={styles.eventTime}>
-                  {formatTimeInZone(event.start_utc)} – {formatTimeInZone(event.end_utc)}
-                  <span style={styles.tzLabel}>{abbrev}</span>
-                </div>
-                
-                {event.notes && (
-                  <div style={styles.notes}>{event.notes}</div>
-                )}
-                
-                {/* Assignment row - only show if not covered */}
-                {!isCovered && (
-                  <div style={styles.assignRow}>
-                    <select
-                      style={styles.hostSelect}
-                      value={selectedHost}
-                      onChange={(e) => setSelectedHosts(prev => ({ ...prev, [eventKey]: e.target.value }))}
-                      disabled={isAssigning}
-                    >
-                      <option value="">Select a host...</option>
-                      {/* Put current user at top */}
-                      {user && (
-                        <option value={user.principal.toText()}>
-                          {user.name} (Me)
-                        </option>
-                      )}
-                      {users
-                        .filter(u => !user || u.principal.toText() !== user.principal.toText())
-                        .map(u => (
-                          <option key={u.principal.toText()} value={u.principal.toText()}>
-                            {u.name}
+                  {!isCovered && (
+                    <div style={styles.assignRow}>
+                      <select
+                        style={styles.hostSelect}
+                        value={selectedHost}
+                        onChange={(e) => setSelectedHosts(prev => ({ ...prev, [eventKey]: e.target.value }))}
+                        disabled={isAssigning}
+                      >
+                        <option value="">Select a host...</option>
+                        {user && (
+                          <option value={user.principal.toText()}>
+                            {user.name} (Me)
                           </option>
-                        ))
-                      }
-                    </select>
-                    <button
-                      style={{
-                        ...styles.assignBtn,
-                        ...(isAssigning || !selectedHost ? styles.assignBtnDisabled : {}),
-                      }}
-                      onClick={() => handleAssign(event)}
-                      disabled={isAssigning || !selectedHost}
-                    >
-                      {isAssigning ? 'Assigning...' : 'Assign'}
-                    </button>
-                  </div>
-                )}
-                
-                {/* Show assigned host when covered */}
-                {isCovered && assignedHostName && (
-                  <div style={styles.assignedHost}>
-                    Assigned to {assignedHostName}
-                  </div>
-                )}
+                        )}
+                        {users
+                          .filter(u => !user || u.principal.toText() !== user.principal.toText())
+                          .map(u => (
+                            <option key={u.principal.toText()} value={u.principal.toText()}>
+                              {u.name}
+                            </option>
+                          ))
+                        }
+                      </select>
+                      <button
+                        style={{
+                          ...styles.assignBtn,
+                          ...(isAssigning || !selectedHost ? styles.assignBtnDisabled : {}),
+                        }}
+                        onClick={() => handleAssign(event)}
+                        disabled={isAssigning || !selectedHost}
+                      >
+                        {isAssigning ? '...' : 'Assign'}
+                      </button>
+                    </div>
+                  )}
+                  {isCovered && assignedHostName && (
+                    <div style={styles.assignedHost}>
+                      Assigned to {assignedHostName}
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -358,19 +361,36 @@ const styles: { [key: string]: React.CSSProperties } = {
   card: {
     background: theme.surface,
     borderRadius: '12px',
-    padding: '16px 20px',
+    padding: '12px 16px',
     border: `1px solid ${theme.border}`,
-  },
-  cardHeader: {
     display: 'flex',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '8px',
+    gap: '16px',
+  },
+  cardLeft: {
+    flex: '0 0 auto',
+    minWidth: '220px',
+  },
+  notesMid: {
+    flex: '1 1 auto',
+    fontSize: '13px',
+    color: theme.textMuted,
+    fontStyle: 'italic',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  cardRight: {
+    flex: '0 0 auto',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    marginLeft: 'auto',
   },
   dateText: {
-    fontSize: '14px',
+    fontSize: '12px',
     fontWeight: 500,
-    color: theme.textSecondary,
+    color: theme.textMuted,
   },
   needsHostBadge: {
     background: 'rgba(248, 113, 113, 0.15)',
@@ -389,55 +409,45 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontWeight: 500,
   },
   eventTitle: {
-    fontSize: '17px',
+    fontSize: '15px',
     fontWeight: 600,
     color: theme.textPrimary,
-    marginBottom: '4px',
+    lineHeight: 1.3,
   },
   eventTime: {
-    fontSize: '14px',
+    fontSize: '13px',
     color: theme.textSecondary,
-    marginBottom: '12px',
   },
   tzLabel: {
-    marginLeft: '8px',
-    fontSize: '12px',
+    marginLeft: '6px',
+    fontSize: '11px',
     color: theme.textMuted,
-  },
-  notes: {
-    fontSize: '14px',
-    color: theme.textMuted,
-    fontStyle: 'italic',
-    marginBottom: '12px',
-    padding: '8px 12px',
-    background: theme.bg,
-    borderRadius: '6px',
   },
   assignRow: {
     display: 'flex',
-    gap: '10px',
+    gap: '6px',
     alignItems: 'center',
-    marginTop: '4px',
   },
   hostSelect: {
-    width: '220px',
-    padding: '8px 12px',
+    width: '160px',
+    padding: '6px 10px',
     background: theme.inputSurface,
     color: theme.textPrimary,
     border: `1px solid ${theme.borderInput}`,
-    borderRadius: '8px',
-    fontSize: '14px',
+    borderRadius: '6px',
+    fontSize: '13px',
     cursor: 'pointer',
   },
   assignBtn: {
-    padding: '8px 16px',
+    padding: '6px 12px',
     background: theme.accent,
     color: '#fff',
     border: 'none',
-    borderRadius: '8px',
-    fontSize: '14px',
+    borderRadius: '6px',
+    fontSize: '13px',
     fontWeight: 500,
     cursor: 'pointer',
+    whiteSpace: 'nowrap',
     transition: 'opacity 150ms ease-out',
   },
   assignBtnDisabled: {
@@ -449,5 +459,6 @@ const styles: { [key: string]: React.CSSProperties } = {
     color: '#34D399',
     fontWeight: 500,
     marginTop: '4px',
+    textAlign: 'right',
   },
 };

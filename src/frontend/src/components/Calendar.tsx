@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useBackend, EventInstance, nanosToDate, dateToNanos, bytesToHex, User, isSessionExpiredError } from '../hooks/useBackend';
 import { useAuth } from '../hooks/useAuth';
+import { useTimezone } from '../hooks/useTimezone';
 import { theme } from '../theme';
 
 interface CalendarEvent extends EventInstance {
@@ -10,6 +11,7 @@ interface CalendarEvent extends EventInstance {
 export default function Calendar() {
   const { actor, loading: actorLoading, triggerSessionExpired } = useBackend();
   const { user } = useAuth();
+  const { timezone, abbrev } = useTimezone();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -18,7 +20,25 @@ export default function Calendar() {
   const [viewMode, setViewMode] = useState<'week' | 'month'>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  // Helper: format nanosecond timestamp to time string in user's timezone
+  const formatTimeInTz = (nanos: bigint) => {
+    return nanosToDate(nanos).toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: timezone,
+    });
+  };
+
+  // Helper: get date key (YYYY-MM-DD) in user's timezone
+  const getDateKeyInTz = (nanos: bigint) => {
+    const d = nanosToDate(nanos);
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).formatToParts(d);
+    const year = parts.find(p => p.type === 'year')?.value;
+    const month = parts.find(p => p.type === 'month')?.value;
+    const day = parts.find(p => p.type === 'day')?.value;
+    return `${year}-${month}-${day}`;
+  };
 
   const { windowStart, windowEnd } = useMemo(() => {
     const start = new Date(currentDate);
@@ -49,7 +69,7 @@ export default function Calendar() {
         if ('Ok' in result) {
           const eventList: CalendarEvent[] = result.Ok.map((e: EventInstance) => ({
             ...e,
-            dateKey: nanosToDate(e.start_utc).toISOString().split('T')[0],
+            dateKey: getDateKeyInTz(e.start_utc),
           }));
           eventList.sort((a, b) => Number(a.start_utc - b.start_utc));
           setEvents(eventList);
@@ -69,7 +89,7 @@ export default function Calendar() {
       }
     }
     fetchEvents();
-  }, [actor, actorLoading, windowStart, windowEnd]);
+  }, [actor, actorLoading, windowStart, windowEnd, timezone]);
 
   useEffect(() => {
     if (!actor || actorLoading) return;
@@ -179,7 +199,7 @@ export default function Calendar() {
       if ('Ok' in result) {
         const eventList: CalendarEvent[] = result.Ok.map((e: EventInstance) => ({
           ...e,
-          dateKey: nanosToDate(e.start_utc).toISOString().split('T')[0],
+          dateKey: getDateKeyInTz(e.start_utc),
         }));
         eventList.sort((a, b) => Number(a.start_utc - b.start_utc));
         setEvents(eventList);
@@ -205,7 +225,7 @@ export default function Calendar() {
     <div style={styles.container}>
       <div style={styles.headerRow}>
         <h2 style={styles.header}>Calendar</h2>
-        <div style={styles.timezoneNote}>{userTimezone}</div>
+        <div style={styles.timezoneNote}>{abbrev}</div>
         <div style={styles.viewToggle}>
           <button style={viewMode === 'week' ? styles.viewBtnActive : styles.viewBtn} onClick={() => setViewMode('week')}>Week</button>
           <button style={viewMode === 'month' ? styles.viewBtnActive : styles.viewBtn} onClick={() => setViewMode('month')}>Month</button>
@@ -260,7 +280,7 @@ export default function Calendar() {
                           >
                             <div style={styles.monthEventTitle}>{event.title}</div>
                             <div style={styles.monthEventTime}>
-                              {nanosToDate(event.start_utc).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                              {formatTimeInTz(event.start_utc)}
                             </div>
                             <div style={isNoHost ? styles.monthEventHostNoHost : styles.monthEventHost}>
                               {hostName}
@@ -306,7 +326,7 @@ export default function Calendar() {
                         onClick={() => setSelectedEvent(event)}
                       >
                         <div style={styles.eventTime}>
-                          {nanosToDate(event.start_utc).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                          {formatTimeInTz(event.start_utc)}
                         </div>
                         <div style={styles.eventTitle}>{event.title}</div>
                         <div style={event.host_principal.length === 0 ? styles.eventHostNoHost : styles.eventHost}>{getHostName(event.host_principal)}</div>
@@ -352,6 +372,16 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
   const [actionError, setActionError] = useState<string | null>(null);
   const [icsLoading, setIcsLoading] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const { timezone, abbrev } = useTimezone();
+
+  const formatTimeInTz = (nanos: bigint) => {
+    return nanosToDate(nanos).toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: timezone,
+    });
+  };
 
   const isHost = event.host_principal.length > 0 && currentUser?.principal?.toText() === event.host_principal[0]?.toText();
   const isNoHost = event.host_principal.length === 0;
@@ -372,8 +402,8 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
     setActionError(null);
     try {
       const result = await actor.assign_host(
-        event.series_id.length > 0 ? [event.series_id[0]] : [],
-        event.series_id.length > 0 ? [event.start_utc] : [],
+        event.series_id,
+        (event.series_id && event.series_id.length > 0) ? [event.start_utc] : [],
         event.instance_id,
         selectedUser.principal
       );
@@ -396,8 +426,8 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
     setActionError(null);
     try {
       const result = await actor.unassign_host(
-        event.series_id.length > 0 ? [event.series_id[0]] : [],
-        event.series_id.length > 0 ? [event.start_utc] : [],
+        event.series_id,
+        (event.series_id && event.series_id.length > 0) ? [event.start_utc] : [],
         event.instance_id
       );
       if ('Ok' in result) onRefresh();
@@ -449,14 +479,15 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
         {isCancelled && <div style={modalStyles.cancelledBadge}>Cancelled</div>}
         <div style={modalStyles.detail}>
           <span style={modalStyles.detailLabel}>Date</span>
-          <span style={modalStyles.detailValue}>{nanosToDate(event.start_utc).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+          <span style={modalStyles.detailValue}>{nanosToDate(event.start_utc).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: timezone })}</span>
         </div>
         <div style={modalStyles.detail}>
           <span style={modalStyles.detailLabel}>Time</span>
           <span style={modalStyles.detailValue}>
-            {nanosToDate(event.start_utc).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+            {formatTimeInTz(event.start_utc)}
             {' – '}
-            {nanosToDate(event.end_utc).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+            {formatTimeInTz(event.end_utc)}
+            {' '}{abbrev}
           </span>
         </div>
         <div style={modalStyles.detail}>
