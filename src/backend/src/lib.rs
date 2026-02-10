@@ -157,6 +157,23 @@ fn update_user(principal: Principal, name: String, email: String, role: Role) ->
     Ok(user)
 }
 
+/// Delete a user (admin only)
+#[update]
+fn delete_user(principal: Principal) -> ApiResult<()> {
+    auth::require_admin()?;
+    
+    // Prevent deleting yourself
+    if ic_cdk::caller() == principal {
+        return Err(ApiError::InvalidInput("Cannot delete yourself".to_string()));
+    }
+    
+    if !storage::delete_user(&principal) {
+        return Err(ApiError::NotFound);
+    }
+    
+    Ok(())
+}
+
 
 // ============================================================================
 // Events - Public

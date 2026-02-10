@@ -54,6 +54,7 @@ function UserManagement() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [linkingUser, setLinkingUser] = useState<User | null>(null);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
 
   // Check if a principal is a placeholder (starts with 0xFFFF)
   const isPlaceholderPrincipal = (principal: Principal): boolean => {
@@ -106,6 +107,28 @@ function UserManagement() {
     }
   };
 
+  const handleDeleteUser = async (user: User) => {
+    if (!actor) return;
+    if (!confirm(`Delete user "${user.name}"? This cannot be undone.`)) return;
+    
+    const key = user.principal.toText();
+    setActionLoading(key + '-delete');
+    try {
+      const result = await actor.delete_user(user.principal);
+      if ('Ok' in result) fetchUsers();
+      else setError(getErrorMessage(result.Err));
+    } catch (err) {
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setError('Your session has expired. Please sign in again.');
+      } else {
+        setError('Failed to delete user');
+      }
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   if (actorLoading || loading) return <div style={styles.loading}>Loading users...</div>;
 
   return (
@@ -119,6 +142,7 @@ function UserManagement() {
       {error && <div style={styles.error}>{error}</div>}
       {showAddForm && <AddUserForm actor={actor} triggerSessionExpired={triggerSessionExpired} onSuccess={() => { setShowAddForm(false); fetchUsers(); }} onCancel={() => setShowAddForm(false)} />}
       {linkingUser && <LinkPrincipalModal user={linkingUser} actor={actor} triggerSessionExpired={triggerSessionExpired} onSuccess={() => { setLinkingUser(null); fetchUsers(); }} onCancel={() => setLinkingUser(null)} />}
+      {editingUser && <EditUserModal user={editingUser} actor={actor} triggerSessionExpired={triggerSessionExpired} onSuccess={() => { setEditingUser(null); fetchUsers(); }} onCancel={() => setEditingUser(null)} />}
       <div style={styles.tableContainer}>
         <table style={styles.table}>
           <thead>
@@ -156,15 +180,28 @@ function UserManagement() {
                     )}
                   </td>
                   <td style={styles.td}>
-                    {isPending ? (
-                      <button style={styles.linkBtn} onClick={() => setLinkingUser(user)}>
-                        Link Principal
+                    <div style={styles.actionGroup}>
+                      <button style={styles.actionBtn} onClick={() => setEditingUser(user)} title="Edit">
+                        Edit
                       </button>
-                    ) : (
-                      <button style={styles.actionBtn} onClick={() => handleToggleStatus(user)} disabled={actionLoading === key}>
-                        {actionLoading === key ? '...' : (isActive ? 'Disable' : 'Enable')}
+                      {isPending ? (
+                        <button style={styles.linkBtn} onClick={() => setLinkingUser(user)}>
+                          Link
+                        </button>
+                      ) : (
+                        <button style={styles.actionBtn} onClick={() => handleToggleStatus(user)} disabled={actionLoading === key}>
+                          {actionLoading === key ? '...' : (isActive ? 'Disable' : 'Enable')}
+                        </button>
+                      )}
+                      <button 
+                        style={styles.deleteBtn} 
+                        onClick={() => handleDeleteUser(user)} 
+                        disabled={actionLoading === key + '-delete'}
+                        title="Delete"
+                      >
+                        {actionLoading === key + '-delete' ? '...' : '×'}
                       </button>
-                    )}
+                    </div>
                   </td>
                 </tr>
               );
@@ -341,6 +378,100 @@ function LinkPrincipalModal({ user, actor, triggerSessionExpired, onSuccess, onC
             <button type="button" onClick={onCancel} style={styles.cancelBtn}>Cancel</button>
             <button type="submit" disabled={loading || !newPrincipal.trim()} style={styles.submitBtn}>
               {loading ? 'Linking...' : 'Link Principal'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ============== EDIT USER MODAL ==============
+function EditUserModal({ user, actor, triggerSessionExpired, onSuccess, onCancel }: { 
+  user: User; 
+  actor: any; 
+  triggerSessionExpired: () => void; 
+  onSuccess: () => void; 
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(user.name);
+  const [email, setEmail] = useState(user.email);
+  const [role, setRole] = useState<'Admin' | 'User'>('Admin' in user.role ? 'Admin' : 'User');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!actor || !name.trim()) return;
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const roleVariant = role === 'Admin' ? { Admin: null } : { User: null };
+      const result = await actor.update_user(user.principal, name.trim(), email.trim(), roleVariant);
+      
+      if ('Ok' in result) {
+        onSuccess();
+      } else {
+        setError(getErrorMessage(result.Err));
+      }
+    } catch (err: any) {
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setError('Your session has expired. Please sign in again.');
+      } else {
+        setError(err.message || 'Failed to update user');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={styles.modalOverlay} onClick={onCancel}>
+      <div style={styles.modal} onClick={e => e.stopPropagation()}>
+        <h4 style={styles.modalTitle}>Edit User</h4>
+        
+        {error && <div style={styles.formError}>{error}</div>}
+        
+        <form onSubmit={handleSubmit}>
+          <div style={styles.formRow}>
+            <label style={styles.label}>Name</label>
+            <input 
+              type="text" 
+              value={name} 
+              onChange={e => setName(e.target.value)} 
+              placeholder="John Doe" 
+              style={styles.input} 
+              required 
+              autoFocus
+            />
+          </div>
+          
+          <div style={styles.formRow}>
+            <label style={styles.label}>Email</label>
+            <input 
+              type="email" 
+              value={email} 
+              onChange={e => setEmail(e.target.value)} 
+              placeholder="john@example.com" 
+              style={styles.input} 
+            />
+          </div>
+          
+          <div style={styles.formRow}>
+            <label style={styles.label}>Role</label>
+            <select value={role} onChange={e => setRole(e.target.value as 'Admin' | 'User')} style={styles.select}>
+              <option value="User">User</option>
+              <option value="Admin">Admin</option>
+            </select>
+          </div>
+          
+          <div style={styles.formActions}>
+            <button type="button" onClick={onCancel} style={styles.cancelBtn}>Cancel</button>
+            <button type="submit" disabled={loading || !name.trim()} style={styles.submitBtn}>
+              {loading ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </form>
@@ -877,4 +1008,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   modal: { background: theme.surface, borderRadius: '16px', padding: '28px', maxWidth: '480px', width: '90%', border: `1px solid ${theme.border}` },
   modalTitle: { marginTop: 0, marginBottom: '8px', fontSize: '18px', color: theme.textPrimary, fontWeight: 600 },
   modalDescription: { fontSize: '14px', color: theme.textMuted, marginBottom: '20px', lineHeight: 1.5 },
+  // Action group styles
+  actionGroup: { display: 'flex', gap: '6px', alignItems: 'center' },
+  deleteBtn: { padding: '6px 10px', background: 'transparent', color: '#F87171', border: '1px solid rgba(248, 113, 113, 0.3)', borderRadius: '6px', cursor: 'pointer', fontSize: '16px', fontWeight: 600, lineHeight: 1, transition: 'all 150ms ease-out' },
 };

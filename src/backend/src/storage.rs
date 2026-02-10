@@ -107,6 +107,10 @@ pub fn user_exists(principal: &Principal) -> bool {
     USERS.with(|users| users.borrow().contains_key(&principal_to_blob(principal)))
 }
 
+pub fn delete_user(principal: &Principal) -> bool {
+    USERS.with(|users| users.borrow_mut().remove(&principal_to_blob(principal)).is_some())
+}
+
 
 // ============================================================================
 // EventSeries Storage

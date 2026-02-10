@@ -159,6 +159,7 @@ service : {
     disable_user : (principal) -> (Result_Unit);
     enable_user : (principal) -> (Result_Unit);
     update_user : (principal, text, text, Role) -> (Result_User);
+    delete_user : (principal) -> (Result_Unit);
 
     // Events - Public
     list_events_public : (nat64, nat64) -> (vec PublicEventView) query;
