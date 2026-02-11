@@ -23,6 +23,9 @@ export default function CoverageQueue() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [filterSeries, setFilterSeries] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'date' | 'series'>('date');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkHost, setBulkHost] = useState<string>('');
+  const [bulkAssigning, setBulkAssigning] = useState(false);
 
   // Fetch unclaimed events
   const fetchEvents = useCallback(async () => {
@@ -189,6 +192,48 @@ export default function CoverageQueue() {
     });
   };
 
+  // Bulk selection helpers
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAll = () => {
+    const visibleIds = filteredEvents.map(e => bytesToHex(e.instance_id as number[]));
+    if (selectedIds.size === visibleIds.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(visibleIds));
+    }
+  };
+  const handleBulkAssign = async () => {
+    if (!actor || !bulkHost || selectedIds.size === 0) return;
+    setBulkAssigning(true);
+    let successCount = 0;
+    for (const event of filteredEvents) {
+      const eid = bytesToHex(event.instance_id as number[]);
+      if (!selectedIds.has(eid)) continue;
+      try {
+        const result = await actor.assign_host(
+          event.series_id ? [Array.from(event.series_id)] : [],
+          event.start_utc ? [event.start_utc] : [],
+          Array.from(event.instance_id as number[]),
+          Principal.fromText(bulkHost)
+        );
+        if ('Ok' in result) successCount++;
+      } catch (err) {
+        if (isSessionExpiredError(err)) { triggerSessionExpired(); break; }
+      }
+    }
+    setBulkAssigning(false);
+    setSelectedIds(new Set());
+    setBulkHost('');
+    setToast({ message: `Assigned ${successCount} event${successCount !== 1 ? 's' : ''}`, type: 'success' });
+    fetchEvents();
+  };
+
   // Unique series titles for filter
   const seriesTitles = useMemo(() => {
     const titles = [...new Set(events.map(e => e.title))];
@@ -272,6 +317,15 @@ export default function CoverageQueue() {
       {/* Filters */}
       {events.length > 0 && (
         <div style={styles.filterBar}>
+          <label style={{ ...styles.filterGroup, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={selectedIds.size === filteredEvents.length && filteredEvents.length > 0}
+              onChange={toggleSelectAll}
+              style={styles.checkbox}
+            />
+            <span style={styles.filterLabel}>All</span>
+          </label>
           <div style={styles.filterGroup}>
             <label style={styles.filterLabel}>Series</label>
             <select
@@ -296,6 +350,31 @@ export default function CoverageQueue() {
               <option value="series">By series</option>
             </select>
           </div>
+        </div>
+      )}
+
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div style={styles.bulkBar}>
+          <span style={styles.bulkCount}>{selectedIds.size} selected</span>
+          <select
+            value={bulkHost}
+            onChange={e => setBulkHost(e.target.value)}
+            style={styles.filterSelect}
+          >
+            <option value="">Select host...</option>
+            {users.filter(u => 'Active' in u.status).map(u => (
+              <option key={u.principal.toText()} value={u.principal.toText()}>{u.name}</option>
+            ))}
+          </select>
+          <button
+            style={{ ...styles.refreshBtn, opacity: !bulkHost ? 0.5 : 1 }}
+            disabled={!bulkHost || bulkAssigning}
+            onClick={handleBulkAssign}
+          >
+            {bulkAssigning ? 'Assigning...' : `Assign ${selectedIds.size}`}
+          </button>
+          <button style={styles.bulkClear} onClick={() => setSelectedIds(new Set())}>Clear</button>
         </div>
       )}
 
@@ -328,6 +407,12 @@ export default function CoverageQueue() {
               }}>
                 {/* Row 1: Event info + badge */}
                 <div style={styles.cardRow1}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(eventKey)}
+                    onChange={() => toggleSelect(eventKey)}
+                    style={styles.checkbox}
+                  />
                   <div style={styles.cardLeft}>
                     <span style={styles.dateText}>
                       {formatDateInZone(nanosToDate(event.start_utc))}
@@ -657,6 +742,38 @@ const styles: { [key: string]: React.CSSProperties } = {
     border: `1px solid ${theme.border}`,
     borderRadius: '6px',
     fontSize: '13px',
+    cursor: 'pointer',
+  },
+  checkbox: {
+    width: '16px',
+    height: '16px',
+    accentColor: theme.accent,
+    cursor: 'pointer',
+    flexShrink: 0,
+  },
+  bulkBar: {
+    display: 'flex',
+    gap: '10px',
+    alignItems: 'center',
+    padding: '10px 16px',
+    background: 'rgba(99, 102, 241, 0.08)',
+    border: `1px solid rgba(99, 102, 241, 0.2)`,
+    borderRadius: '8px',
+    marginBottom: '16px',
+  },
+  bulkCount: {
+    fontSize: '13px',
+    fontWeight: 600,
+    color: theme.accent,
+    minWidth: '80px',
+  },
+  bulkClear: {
+    padding: '6px 10px',
+    background: 'transparent',
+    color: theme.textMuted,
+    border: `1px solid ${theme.border}`,
+    borderRadius: '6px',
+    fontSize: '12px',
     cursor: 'pointer',
   },
 };
