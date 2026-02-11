@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { TimezoneProvider } from './hooks/useTimezone';
+import { ConfirmProvider } from './components/ui';
 import PublicCalendar from './components/PublicCalendar';
 import AuthenticatedLayout from './components/AuthenticatedLayout';
 import NotAuthorized from './components/NotAuthorized';
@@ -60,7 +61,9 @@ export default function App() {
     <BrowserRouter>
       <TimezoneProvider>
         <AuthProvider>
-          <AppRoutes />
+          <ConfirmProvider>
+            <AppRoutes />
+          </ConfirmProvider>
         </AuthProvider>
       </TimezoneProvider>
     </BrowserRouter>
