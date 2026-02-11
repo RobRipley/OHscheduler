@@ -286,9 +286,15 @@ export default function Calendar() {
                               ...styles.monthEventCard,
                               ...(isNoHost ? styles.monthEventNoHost : styles.monthEventAssigned),
                             }}
+                            className="event-card-hover"
                             onClick={() => setSelectedEvent(event)}
                           >
-                            <div style={styles.monthEventTitle}>{event.title}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <div style={{ ...styles.monthEventTitle, flex: 1 }}>{event.title}</div>
+                              {event.link && event.link.length > 0 && (
+                                <span style={{ fontSize: '10px', opacity: 0.6 }} title="Has meeting link">🔗</span>
+                              )}
+                            </div>
                             <div style={styles.monthEventTime}>
                               {formatTimeInTz(event.start_utc)}
                             </div>
@@ -690,7 +696,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   weekHeader: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: theme.surfaceElevated, borderBottom: `1px solid ${theme.border}` },
   weekHeaderCell: { padding: '12px 8px', textAlign: 'center', fontSize: '11px', fontWeight: 600, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' },
   weekRow: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: `1px solid ${theme.border}` },
-  dayCell: { minHeight: '140px', padding: '8px', borderRight: `1px solid ${theme.border}`, background: theme.surface },
+  dayCell: { minHeight: '160px', padding: '8px', borderRight: `1px solid ${theme.border}`, background: theme.surface },
   todayCell: { background: theme.surfaceElevated },
   outsideMonth: { background: theme.bg, opacity: 0.5 },
   dayCellHeader: { marginBottom: '8px' },
@@ -698,7 +704,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   dayNumberToday: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '26px', height: '26px', fontSize: '14px', fontWeight: 600, color: '#fff', background: theme.accent, borderRadius: '50%' },
   dayCellEvents: { display: 'flex', flexDirection: 'column', gap: '4px' },
   
-  monthEventCard: { padding: '6px 8px', borderRadius: '6px', cursor: 'pointer', borderLeft: '3px solid' },
+  monthEventCard: { padding: '6px 8px', borderRadius: '6px', cursor: 'pointer', borderLeft: '3px solid', transition: 'filter 0.15s, transform 0.15s' },
   monthEventAssigned: { background: 'rgba(99, 102, 241, 0.15)', borderLeftColor: theme.accent },
   monthEventNoHost: { background: 'rgba(248, 113, 113, 0.15)', borderLeftColor: '#F87171' },
   monthEventTitle: { fontSize: '12px', fontWeight: 600, color: theme.textPrimary, marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },

@@ -22,11 +22,11 @@ export default function AdminPanel() {
     <div>
       <h2 style={styles.pageTitle}>Admin Panel</h2>
       
-      <div style={styles.tabs}>
-        <NavLink to="/dashboard/admin" end style={tabStyle}>Users</NavLink>
-        <NavLink to="/dashboard/admin/series" style={tabStyle}>Event Series</NavLink>
-        <NavLink to="/dashboard/admin/settings" style={tabStyle}>Settings</NavLink>
-        <NavLink to="/dashboard/admin/reports" style={tabStyle}>Reports</NavLink>
+      <div style={styles.segmentedControl}>
+        <NavLink to="/dashboard/admin" end className={({ isActive }) => `admin-tab${isActive ? ' admin-tab-active' : ''}`}>Users</NavLink>
+        <NavLink to="/dashboard/admin/series" className={({ isActive }) => `admin-tab${isActive ? ' admin-tab-active' : ''}`}>Event Series</NavLink>
+        <NavLink to="/dashboard/admin/settings" className={({ isActive }) => `admin-tab${isActive ? ' admin-tab-active' : ''}`}>Settings</NavLink>
+        <NavLink to="/dashboard/admin/reports" className={({ isActive }) => `admin-tab${isActive ? ' admin-tab-active' : ''}`}>Reports</NavLink>
       </div>
       
       <div style={styles.content}>
@@ -953,6 +953,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   unauthorized: { padding: '60px 20px', textAlign: 'center', color: theme.textMuted },
   pageTitle: { margin: '0 0 24px 0', color: theme.textPrimary, fontSize: '20px', fontWeight: 600 },
   tabs: { display: 'flex', gap: '4px', marginBottom: '24px', borderBottom: `1px solid ${theme.border}`, paddingBottom: '12px' },
+  segmentedControl: { display: 'inline-flex', gap: '2px', padding: '3px', background: theme.surface, borderRadius: '8px', border: `1px solid ${theme.border}`, marginBottom: '24px' },
   tab: { padding: '8px 16px', background: 'transparent', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', color: theme.textMuted, textDecoration: 'none', transition: 'color 150ms ease-out' },
   tabActive: { color: theme.textPrimary, borderBottom: `2px solid ${theme.accent}`, marginBottom: '-13px', paddingBottom: '10px' },
   content: { background: theme.surface, borderRadius: '12px', padding: '24px', border: `1px solid ${theme.border}` },
@@ -993,12 +994,12 @@ const styles: { [key: string]: React.CSSProperties } = {
   emptyText: { color: theme.textSecondary, margin: 0, fontSize: '15px' },
   emptyHint: { color: theme.textMuted, fontSize: '13px', marginTop: '8px' },
   seriesList: { display: 'flex', flexDirection: 'column', gap: '12px' },
-  seriesCard: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '16px', background: theme.surfaceElevated, borderRadius: '10px', border: `1px solid ${theme.border}` },
-  seriesInfo: { flex: 1 },
-  seriesTitle: { fontSize: '15px', fontWeight: 600, color: theme.textPrimary, marginBottom: '4px' },
-  seriesMeta: { fontSize: '13px', color: theme.textMuted },
-  seriesNotes: { fontSize: '13px', color: theme.textMuted, marginTop: '8px', fontStyle: 'italic' },
-  seriesActions: { display: 'flex', gap: '8px' },
+  seriesCard: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '16px 16px 16px 20px', background: theme.surfaceElevated, borderRadius: '10px', border: `1px solid ${theme.border}`, borderLeft: `3px solid ${theme.accent}` },
+  seriesInfo: { flex: 1, minWidth: 0 },
+  seriesTitle: { fontSize: '16px', fontWeight: 700, color: theme.textPrimary, marginBottom: '6px' },
+  seriesMeta: { fontSize: '13px', color: theme.textSecondary, lineHeight: 1.5 },
+  seriesNotes: { fontSize: '13px', color: theme.textMuted, marginTop: '8px', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const },
+  seriesActions: { display: 'flex', gap: '8px', flexShrink: 0, marginLeft: '16px' },
   iconBtn: { padding: '6px 12px', background: 'transparent', color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '6px', cursor: 'pointer', fontSize: '13px', transition: 'all 150ms ease-out' },
   iconBtnDanger: { padding: '6px 12px', background: 'transparent', color: theme.textMuted, border: `1px solid ${theme.border}`, borderRadius: '6px', cursor: 'pointer', fontSize: '13px', transition: 'all 150ms ease-out' },
   settingsForm: { maxWidth: '600px' },
