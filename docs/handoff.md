@@ -1,7 +1,7 @@
 # Office Hours Scheduler – Project Handoff Document
 
-**Last Updated:** 2026-02-04 (Session 6 - Calendar Height + Notification Bell)
-**Status:** Mainnet Deployed / In-App Notifications Implemented / Ready for Deploy
+**Last Updated:** 2026-02-11 (Session 8 - UX Phase 1 + Email Integration Spec)
+**Status:** Mainnet Deployed / UX Phase 1 Complete / Email Integration Specified
 
 ---
 
@@ -251,6 +251,9 @@ dfx canister call backend create_event_series '(record {
 | 2026-02-03 | 4 | ✅ | Fixed session expiry handling, pushed code to GitHub, deployed to mainnet |
 | 2026-02-04 | 5 | ✅ | Comprehensive session expiry detection across all components, auto-recovery with banner UI |
 | 2026-02-04 | 6 | ✅ | Calendar height expanded (160px→220px), NotificationBell component, Assign Host dropdown, TypeScript fixes |
+| 2026-02-11 | 7 | ✅ | UX design audit report (docs/ux-audit-report.md) — comprehensive review of all pages, components, patterns |
+| 2026-02-11 | 8 | ✅ | UX Phase 1 quick wins: Inter font, dark body bg, global.css (hover/focus/scrollbar/modal animations), theme expansion, nav fix, calendar nav centering, Yieldschool branding on all pages. Deployed to mainnet. |
+| 2026-02-11 | 8 | 📋 | Email integration specification written (Section 13 below) |
 
 ---
 
@@ -261,10 +264,11 @@ OHscheduler/
 ├── dfx.json
 ├── Cargo.toml
 ├── package.json
-├── vite.config.ts
+├── vite.config.ts              # publicDir: 'static' configured
 ├── tsconfig.json
 ├── docs/
-│   └── handoff.md
+│   ├── handoff.md
+│   └── ux-audit-report.md      # Comprehensive UX audit with 5-phase roadmap
 ├── src/
 │   ├── backend/
 │   │   ├── Cargo.toml
@@ -276,22 +280,29 @@ OHscheduler/
 │   │       ├── auth.rs         # Auth + whitelist
 │   │       ├── recurrence.rs   # Event materialization
 │   │       ├── coverage.rs     # Host assign/unassign
-│   │       └── notifications.rs # Outbox + ICS
+│   │       └── notifications.rs # Outbox + ICS generation
 │   └── frontend/
-│       ├── index.html
+│       ├── index.html          # Inter font, color-scheme: dark
+│       ├── static/
+│       │   └── yieldschool_inc_logo.jpeg
 │       └── src/
 │           ├── main.tsx
+│           ├── global.css       # Hover states, focus rings, scrollbars, modal animations
+│           ├── theme.ts         # Expanded: semantic status colors
 │           ├── App.tsx
 │           ├── hooks/
-│           │   └── useAuth.tsx  # II auth (working!)
+│           │   ├── useAuth.tsx
+│           │   ├── useBackend.tsx
+│           │   └── useTimezone.tsx
 │           └── components/
 │               ├── NotAuthorized.tsx
-│               ├── Login.tsx
-│               ├── PublicCalendar.tsx
-│               ├── AuthenticatedLayout.tsx
-│               ├── Calendar.tsx      # TODO
-│               ├── CoverageQueue.tsx # TODO
-│               └── AdminPanel.tsx    # TODO
+│               ├── Login.tsx          # Yieldschool branding
+│               ├── PublicCalendar.tsx  # Yieldschool branding
+│               ├── AuthenticatedLayout.tsx  # Yieldschool logo, fixed nav indicator
+│               ├── Calendar.tsx       # Fixed nav centering
+│               ├── CoverageQueue.tsx
+│               ├── AdminPanel.tsx
+│               └── NotificationBell.tsx
 ```
 
 ---
@@ -308,17 +319,364 @@ OHscheduler/
 8. Users on OOO cannot be assigned (admin override allowed)
 9. Public calendar is read-only
 10. DFX principal is initial admin (bootstrap before II known)
-11. No HTTP outcalls in v1 (notification outbox only)
+11. No HTTP outcalls in v1 (notification outbox only — email worker spec in Section 13)
 
 ---
 
 ## 12. Next Steps
 
-1. Implement Calendar view with real events from backend
-2. Implement Coverage Queue with claim/unclaim
-3. Implement Admin Panel (users, series, settings)
-4. Add proper error handling and loading states
-5. Test full flow end-to-end
-6. Deploy to mainnet
+1. **UX Phase 2** — Component refinement: unified Modal, custom Select/Combobox, button system consolidation, skeleton loaders, toggle switch, confirmation dialog (see `docs/ux-audit-report.md`)
+2. **Invite Code System** — Replace manual principal-copy onboarding with one-time invite codes (see Section 13A)
+3. **Email Integration** — Off-chain worker + SendGrid for notifications (see Section 13B)
+4. **UX Phases 3–5** — Page polish, feature enhancements, accessibility (see audit report)
+5. Test full claim/unclaim flow end-to-end
+6. Add loading states and error boundaries
+
+---
+
+## 13. Email Integration & Invite Code Specification
+
+### 13A. Invite Code System
+
+**Problem:** Current onboarding requires users to (1) sign in with II, (2) copy their principal from the "Not Authorized" page, (3) send it to an admin via side-channel, (4) wait for admin to whitelist, (5) return and refresh. This is high-friction and error-prone.
+
+**Solution:** Admin generates a one-time invite code when creating a user. The user enters the code on the "Not Authorized" page, which links their II principal to the pre-created user record automatically.
+
+#### Flow
+
+```
+Admin                                  New User
+  │                                       │
+  ├── Admin Panel → "Add User"            │
+  │   (enters name, email, role)          │
+  │                                       │
+  ├── Backend generates invite code       │
+  │   (e.g., "YS-7K2M-X9P4")            │
+  │                                       │
+  ├── Admin copies code, sends via        │
+  │   Slack/email/text                    │
+  │                                ───────┤
+  │                                       ├── User opens app URL
+  │                                       ├── Signs in with II
+  │                                       ├── Sees "Not Authorized" page
+  │                                       │   (now with invite code input)
+  │                                       ├── Enters code "YS-7K2M-X9P4"
+  │                                       ├── Backend validates code,
+  │                                       │   links II principal to user
+  │                                       ├── Redirect to dashboard ✅
+  │                                       │
+```
+
+#### Backend Changes
+
+**New type:**
+```rust
+pub struct InviteCode {
+    pub code: String,           // "YS-XXXX-XXXX" (10 chars, alphanumeric)
+    pub user_principal_placeholder: Principal, // The placeholder principal from Add User
+    pub created_at: u64,
+    pub created_by: Principal,
+    pub expires_at: u64,        // 7-day TTL
+    pub redeemed: bool,
+    pub redeemed_by: Option<Principal>,  // The actual II principal
+    pub redeemed_at: Option<u64>,
+}
+```
+
+**New storage:** `StableBTreeMap<String, InviteCode>` keyed by code string.
+
+**New endpoints:**
+```
+// Admin: generate invite code for an existing user (one with placeholder principal)
+generate_invite_code(user_placeholder_principal: Principal) -> Result<String, ApiError>
+  - Requires admin
+  - Validates user exists and has placeholder principal
+  - Generates random code: "YS-" + 4 alphanumeric + "-" + 4 alphanumeric
+  - Stores InviteCode record with 7-day expiry
+  - Returns the code string
+
+// Public (authenticated via II but not authorized): redeem invite code
+redeem_invite_code(code: String) -> Result<User, ApiError>
+  - Caller must be authenticated (has II principal) but need NOT be authorized
+  - Validates code exists, not expired, not redeemed
+  - Replaces the placeholder principal on the User record with caller's principal
+  - Marks code as redeemed
+  - Returns the updated User (caller is now authorized)
+```
+
+**Frontend changes:**
+- `NotAuthorized.tsx`: Add invite code input field below the existing principal display
+  - Text input + "Redeem" button
+  - On success: redirect to dashboard
+  - On error: show message ("Invalid code", "Code expired", "Code already used")
+- `AdminPanel.tsx` → Users tab:
+  - "Add User" flow remains the same (name, email, role)
+  - After creating a user with placeholder principal, show a "Generate Invite Code" button next to users with `Pending II link` status
+  - Display the generated code with a copy button
+  - Show code status: active (with expiry), redeemed, expired
+
+#### Code Generation
+
+Use `ic_cdk::api::time()` + random bytes from `ic_cdk::api::call::raw_rand()` to generate codes. Format: `YS-XXXX-XXXX` where X is from the set `[A-Z0-9]` excluding ambiguous characters (0/O, 1/I/L). This gives ~34^8 = 1.8 trillion possible codes — more than sufficient.
+
+Note: `raw_rand()` is an async inter-canister call to the management canister, so `generate_invite_code` must be an `#[update]` endpoint. This is appropriate since it modifies state anyway.
+
+---
+
+### 13B. Email Integration via Off-Chain Worker
+
+**Architecture:** The backend canister already has a complete notification outbox system. Notification jobs are created with status `Pending` when relevant actions occur (host assignment, removal, cancellation, time change). The missing piece is an off-chain worker that polls this outbox and sends emails via SendGrid.
+
+```
+┌─────────────────────┐     poll        ┌──────────────────┐     send      ┌───────────┐
+│  Backend Canister    │ ◄───────────── │  Email Worker     │ ────────────► │  SendGrid │
+│                      │                │  (Node.js)        │               │  API      │
+│  NotificationJob     │ mark_sent      │                   │               │           │
+│  outbox (stable mem) │ ──────────────►│  Runs on cron     │               │           │
+│                      │                │  (every 2 min)    │               │           │
+└─────────────────────┘                 └──────────────────┘               └───────────┘
+                                               │
+                                               │ authenticate via
+                                               │ II or agent identity
+                                               ▼
+                                        ┌──────────────────┐
+                                        │  IC Agent (JS)    │
+                                        │  with secp256k1   │
+                                        │  key (admin)      │
+                                        └──────────────────┘
+```
+
+#### Why Off-Chain Worker (Not Direct HTTP Outcall)
+
+ICP HTTP outcalls go through subnet consensus — all 13 replicas make the same POST to SendGrid, resulting in 13 duplicate emails per notification. Workarounds exist (idempotency keys, transform functions) but add complexity and fragility. The off-chain worker pattern is simpler, proven, and already anticipated by the existing outbox architecture.
+
+#### SendGrid Setup
+
+1. **Create SendGrid account** — free tier: 100 emails/day (more than enough)
+2. **Verify sender identity** — either Single Sender Verification (quick, uses one email address) or Domain Authentication (proper, requires DNS records for `yieldschool.com`)
+   - Recommendation: Domain Authentication. Adds SPF/DKIM records so emails don't land in spam. You'll add 3 CNAME records to your DNS.
+3. **Create API key** — Settings → API Keys → Create with "Mail Send" permission only (least privilege)
+4. **Store the API key** — in the worker's environment variables (never in the canister or frontend)
+
+#### Worker Implementation
+
+**Runtime:** Node.js script. Can run as:
+- **Cloudflare Worker** (free tier, cron trigger every 2 min) — recommended, zero infrastructure
+- **Railway / Render** (free tier, background worker)
+- **GitHub Actions** (scheduled workflow every 5 min) — simplest but min interval is 5 min
+- **Local cron** (good for dev, not for production)
+
+**Dependencies:**
+```json
+{
+  "@dfinity/agent": "latest",
+  "@dfinity/principal": "latest",
+  "@dfinity/candid": "latest",
+  "@sendgrid/mail": "^8.0.0"
+}
+```
+
+**Core Logic (pseudocode):**
+```javascript
+import { HttpAgent, Actor } from '@dfinity/agent';
+import { Ed25519KeyIdentity } from '@dfinity/identity';
+import sgMail from '@sendgrid/mail';
+
+// Configuration (from environment variables)
+const BACKEND_CANISTER_ID = '6vnyh-fqaaa-aaaad-aebwa-cai';
+const IC_HOST = 'https://icp-api.io';
+const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
+const WORKER_IDENTITY_KEY = process.env.WORKER_IDENTITY_KEY; // see auth section
+const FROM_EMAIL = 'noreply@yieldschool.com';
+const FROM_NAME = 'Yieldschool Office Hours';
+
+sgMail.setApiKey(SENDGRID_API_KEY);
+
+async function pollAndSend() {
+  // 1. Create IC agent with worker identity
+  const identity = Ed25519KeyIdentity.fromSecretKey(
+    Buffer.from(WORKER_IDENTITY_KEY, 'hex')
+  );
+  const agent = new HttpAgent({ host: IC_HOST, identity });
+  const backend = Actor.createActor(idlFactory, {
+    agent,
+    canisterId: BACKEND_CANISTER_ID,
+  });
+
+  // 2. Fetch pending notifications
+  const result = await backend.list_pending_notifications();
+  if ('Err' in result) {
+    console.error('Failed to fetch notifications:', result.Err);
+    return;
+  }
+  const jobs = result.Ok;
+  console.log(`Found ${jobs.length} pending notifications`);
+
+  // 3. Send each email
+  for (const job of jobs) {
+    try {
+      const msg = {
+        to: job.recipient_email,
+        from: { email: FROM_EMAIL, name: FROM_NAME },
+        subject: job.subject,
+        text: job.body_text,
+        html: formatHtmlEmail(job),  // styled HTML version
+      };
+
+      // Attach ICS if present
+      if (job.ics_payload && job.ics_payload.length > 0) {
+        msg.attachments = [{
+          content: Buffer.from(job.ics_payload[0]).toString('base64'),
+          filename: 'invite.ics',
+          type: 'text/calendar; method=REQUEST',
+          disposition: 'attachment',
+        }];
+      }
+
+      await sgMail.send(msg);
+      console.log(`Sent: ${job.subject} → ${job.recipient_email}`);
+
+      // 4. Mark as sent in canister
+      await backend.mark_notification_sent(Array.from(job.job_id));
+      console.log(`Marked sent: ${toHex(job.job_id)}`);
+
+    } catch (err) {
+      console.error(`Failed to send ${toHex(job.job_id)}:`, err.message);
+      // Don't mark as sent — will retry on next poll
+    }
+  }
+}
+```
+
+#### Worker Authentication
+
+The worker needs to call `list_pending_notifications()` and `mark_notification_sent()`, both of which require admin auth. Two approaches:
+
+**Option A: Dedicated worker identity (recommended)**
+1. Generate a new Ed25519 keypair for the worker (`dfx identity new email-worker`)
+2. Get its principal (`dfx identity get-principal --identity email-worker`)
+3. Authorize it as Admin in the backend canister
+4. Export the private key and store it as an environment variable in the worker runtime
+5. The worker creates an `Ed25519KeyIdentity` from this key to authenticate
+
+**Option B: Use existing admin identity**
+Export your `RobRipley_YSL` identity's key and use it in the worker. Simpler but less secure — if the worker is compromised, your admin identity is compromised.
+
+Recommendation: Option A. Create a dedicated `email-worker` identity with admin privileges. If it's ever compromised, you can disable just that identity without affecting your own.
+
+#### Email Templates
+
+The worker should transform the plain `body_text` into styled HTML. A single template works for all notification types:
+
+```html
+<!-- Minimal, dark-theme-aware email template -->
+<div style="max-width: 560px; margin: 0 auto; font-family: 'Inter', Arial, sans-serif;">
+  <div style="padding: 32px 24px; background: #121826; border-radius: 12px; color: #E5E7EB;">
+    <img src="https://6sm6t-iiaaa-aaaad-aebwq-cai.icp0.io/yieldschool_inc_logo.jpeg"
+         width="40" height="40" style="border-radius: 8px;" />
+    <h2 style="color: #F9FAFB; margin: 16px 0 8px;">{{subject}}</h2>
+    <p style="color: #D1D5DB; line-height: 1.6;">{{body_text}}</p>
+    <hr style="border: 1px solid #1E2433; margin: 24px 0;" />
+    <p style="font-size: 12px; color: #6B7280;">
+      Yieldschool Office Hours · <a href="https://6sm6t-iiaaa-aaaad-aebwq-cai.icp0.io/"
+      style="color: #6366F1;">Open Calendar</a>
+    </p>
+  </div>
+</div>
+```
+
+Note: Many email clients ignore dark backgrounds. The template should also work on light backgrounds. Test with both Gmail and Apple Mail.
+
+#### Notification Types Already Supported
+
+The backend already creates `NotificationJob` records for these events:
+
+| Type | Trigger | Subject | ICS Attached |
+|------|---------|---------|:---:|
+| `HostAssigned` | Admin assigns host to session | "You've been assigned to an Office Hours session" | ✅ REQUEST |
+| `HostRemoved` | Admin removes host from session | "You've been removed from an Office Hours session" | ✅ CANCEL |
+| `InstanceCancelled` | Admin cancels a session instance | "Office Hours session cancelled: {title}" | ✅ CANCEL |
+| `InstanceTimeChanged` | Admin changes session time | "Office Hours session time changed: {title}" | ✅ REQUEST |
+
+**Not yet implemented in backend (future):**
+
+| Type | Trigger | Notes |
+|------|---------|-------|
+| `UnclaimedReminder` | Cron/timer: session within 48h with no host | Requires canister timer |
+| `CoverageNeededSoon` | Cron/timer: session within 24h, still unclaimed | Requires canister timer |
+| `DailyDigest` | Cron/timer: daily summary of upcoming sessions | Requires canister timer |
+| `WeeklyDigest` | Cron/timer: weekly summary | Requires canister timer |
+| `InviteEmail` | Admin generates invite code | New — see Section 13A |
+
+The timer-based notifications would require either ICP canister timers (`ic_cdk_timers`) or the off-chain worker itself checking for upcoming unclaimed sessions. The worker approach is simpler since it already has the polling loop.
+
+#### Deployment Recommendation: Cloudflare Worker
+
+Cloudflare Workers free tier includes cron triggers (scheduled events). This is the lowest-maintenance option:
+
+```
+Project structure:
+  email-worker/
+  ├── package.json
+  ├── wrangler.toml          # Cloudflare config + cron schedule
+  ├── src/
+  │   ├── index.ts           # Main worker logic
+  │   ├── sendgrid.ts        # SendGrid email sending
+  │   ├── ic-agent.ts        # IC agent setup + canister calls
+  │   ├── templates.ts       # HTML email templates
+  │   └── backend.did.js     # Generated Candid interface
+  └── .dev.vars              # Local env vars (not committed)
+```
+
+```toml
+# wrangler.toml
+name = "yieldschool-email-worker"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[triggers]
+crons = ["*/2 * * * *"]  # Every 2 minutes
+
+[vars]
+BACKEND_CANISTER_ID = "6vnyh-fqaaa-aaaad-aebwa-cai"
+IC_HOST = "https://icp-api.io"
+FROM_EMAIL = "noreply@yieldschool.com"
+
+# Secrets (set via `wrangler secret put`):
+# SENDGRID_API_KEY
+# WORKER_IDENTITY_KEY
+```
+
+#### Implementation Sequence
+
+1. **SendGrid setup** (~15 min)
+   - Create account, verify domain, generate API key
+
+2. **Worker identity** (~5 min)
+   - `dfx identity new email-worker`
+   - Authorize as admin in backend canister
+   - Export private key
+
+3. **Worker scaffold** (~30 min)
+   - Create `email-worker/` directory in project
+   - Set up wrangler, install dependencies
+   - Implement IC agent connection + canister calls
+
+4. **Email sending logic** (~30 min)
+   - SendGrid integration
+   - HTML email template
+   - ICS attachment handling
+   - Error handling + retry logic
+
+5. **Deploy + test** (~20 min)
+   - `wrangler deploy`
+   - Trigger a test notification (assign host in app)
+   - Verify email delivery
+
+6. **Invite code email** (Phase 2, after invite codes are built)
+   - Add `InviteEmail` notification type to backend
+   - Worker sends invite emails with redemption link
+
+Total estimated implementation time: ~2 hours for the core worker, assuming SendGrid account is set up.
 
 ---
