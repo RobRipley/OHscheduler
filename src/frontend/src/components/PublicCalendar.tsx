@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Actor, HttpAgent } from '@dfinity/agent';
 import { useAuth } from '../hooks/useAuth';
 import { TIMEZONE_LIST, getTimezoneAbbrev } from '../hooks/useTimezone';
+import { Modal, Button, SkeletonCalendar } from './ui';
 import { theme } from '../theme';
 
 const BACKEND_CANISTER_ID = import.meta.env.VITE_BACKEND_CANISTER_ID || 'uxrrr-q7777-77774-qaaaq-cai';
@@ -178,6 +179,23 @@ export default function PublicCalendar() {
 
   const todayKey = getDateKeyInTz(BigInt(Date.now()) * BigInt(1_000_000));
   const isCurrentMonth = (date: Date) => date.getMonth() === currentMonth.getMonth();
+  const [selectedEvent, setSelectedEvent] = useState<PublicEvent | null>(null);
+
+  // Compute stats for the month
+  const monthStats = useMemo(() => {
+    const active = events.filter(e => 'Active' in e.status);
+    const needsHost = active.filter(e => e.host_name.length === 0);
+    return { total: active.length, needsHost: needsHost.length };
+  }, [events]);
+
+  // Find next upcoming session (from now forward)
+  const nextSession = useMemo(() => {
+    const now = BigInt(Date.now()) * BigInt(1_000_000);
+    const upcoming = events
+      .filter(e => 'Active' in e.status && e.start_utc > now)
+      .sort((a, b) => (a.start_utc < b.start_utc ? -1 : 1));
+    return upcoming.length > 0 ? upcoming[0] : null;
+  }, [events]);
 
   return (
     <div style={styles.container}>
@@ -256,8 +274,36 @@ export default function PublicCalendar() {
         </div>
 
         {loading ? (
-          <div style={styles.loading}>Loading events...</div>
+          <SkeletonCalendar />
         ) : (
+          <>
+            {/* Event count summary */}
+            <div style={styles.monthSummary}>
+              <span>{monthStats.total} session{monthStats.total !== 1 ? 's' : ''} this month</span>
+              {monthStats.needsHost > 0 && (
+                <span style={styles.needsHostSummary}> · {monthStats.needsHost} need{monthStats.needsHost !== 1 ? '' : 's'} host</span>
+              )}
+            </div>
+
+            {/* Next upcoming session banner */}
+            {nextSession && (
+              <div style={styles.nextSessionBanner} onClick={() => setSelectedEvent(nextSession)}>
+                <div style={styles.nextSessionLabel}>Next Session</div>
+                <div style={styles.nextSessionInfo}>
+                  <strong>{nextSession.title}</strong>
+                  <span style={styles.nextSessionTime}>
+                    {new Date(Number(nextSession.start_utc / BigInt(1_000_000))).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: timezone })}
+                    {' · '}
+                    {formatTime(nextSession.start_utc)} {abbrev}
+                  </span>
+                  {nextSession.host_name.length > 0 && (
+                    <span style={styles.nextSessionHost}>with {nextSession.host_name[0]}</span>
+                  )}
+                </div>
+                <span style={styles.nextSessionArrow}>→</span>
+              </div>
+            )}
+
           <div style={styles.calendar}>
             <div style={styles.weekHeader}>
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
@@ -292,7 +338,8 @@ export default function PublicCalendar() {
                             <div key={idx} style={{
                               ...styles.eventCard,
                               ...(isNoHost ? styles.eventNoHost : styles.eventAssigned),
-                            }}>
+                              cursor: 'pointer',
+                            }} onClick={() => setSelectedEvent(event)} className="event-card-hover">
                               <div style={styles.eventTitle}>{event.title}</div>
                               <div style={styles.eventTime}>{formatTime(event.start_utc)}</div>
                               <div style={isNoHost ? styles.eventHostNoHost : styles.eventHost}>
@@ -311,6 +358,47 @@ export default function PublicCalendar() {
               </div>
             ))}
           </div>
+          </>
+        )}
+
+        {/* Event Detail Modal (read-only for public) */}
+        {selectedEvent && (
+          <Modal open={true} onClose={() => setSelectedEvent(null)} title={selectedEvent.title} maxWidth="420px">
+            <div style={pubModalStyles.detail}>
+              <span style={pubModalStyles.label}>DATE</span>
+              <span style={pubModalStyles.value}>{new Date(Number(selectedEvent.start_utc / BigInt(1_000_000))).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: timezone })}</span>
+            </div>
+            <div style={pubModalStyles.detail}>
+              <span style={pubModalStyles.label}>TIME</span>
+              <span style={pubModalStyles.value}>
+                {formatTime(selectedEvent.start_utc)} – {formatTime(selectedEvent.end_utc)} {abbrev}
+              </span>
+            </div>
+            <div style={pubModalStyles.detail}>
+              <span style={pubModalStyles.label}>HOST</span>
+              <span style={{ ...pubModalStyles.value, color: selectedEvent.host_name.length === 0 ? '#F87171' : theme.textPrimary }}>
+                {selectedEvent.host_name.length > 0 ? selectedEvent.host_name[0] : 'No host assigned'}
+              </span>
+            </div>
+            {selectedEvent.notes && (
+              <div style={pubModalStyles.detail}>
+                <span style={pubModalStyles.label}>NOTES</span>
+                <span style={pubModalStyles.value}>{selectedEvent.notes}</span>
+              </div>
+            )}
+            {selectedEvent.link && selectedEvent.link.length > 0 && (
+              <div style={{ marginTop: '16px' }}>
+                <a
+                  href={selectedEvent.link[0]}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={pubModalStyles.meetingLink}
+                >
+                  Join Meeting →
+                </a>
+              </div>
+            )}
+          </Modal>
         )}
 
         {!loading && events.length === 0 && (
@@ -378,4 +466,23 @@ const styles: { [key: string]: React.CSSProperties } = {
   eventHost: { fontSize: '11px', fontWeight: 500, color: theme.accent },
   eventHostNoHost: { fontSize: '11px', fontWeight: 500, color: '#F87171' },
   moreEvents: { fontSize: '11px', color: theme.textMuted, padding: '4px 8px' },
+
+  // Month summary
+  monthSummary: { fontSize: '13px', color: theme.textMuted, marginBottom: '12px' },
+  needsHostSummary: { color: '#F87171' },
+
+  // Next session banner
+  nextSessionBanner: { display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 18px', background: `linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(99, 102, 241, 0.06))`, border: `1px solid rgba(99, 102, 241, 0.25)`, borderRadius: '10px', marginBottom: '16px', cursor: 'pointer', transition: 'border-color 0.15s' },
+  nextSessionLabel: { fontSize: '10px', fontWeight: 700, color: theme.accent, textTransform: 'uppercase' as const, letterSpacing: '0.08em', whiteSpace: 'nowrap' as const, background: 'rgba(99, 102, 241, 0.15)', padding: '4px 8px', borderRadius: '4px' },
+  nextSessionInfo: { flex: 1, display: 'flex', flexWrap: 'wrap' as const, alignItems: 'center', gap: '6px 12px', fontSize: '14px', color: theme.textPrimary },
+  nextSessionTime: { fontSize: '13px', color: theme.textSecondary },
+  nextSessionHost: { fontSize: '13px', color: theme.accent },
+  nextSessionArrow: { fontSize: '18px', color: theme.textMuted },
+};
+
+const pubModalStyles: { [key: string]: React.CSSProperties } = {
+  detail: { display: 'flex', flexDirection: 'column', gap: '2px', marginBottom: '16px' },
+  label: { fontSize: '10px', fontWeight: 600, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.08em' },
+  value: { fontSize: '15px', color: theme.textPrimary },
+  meetingLink: { display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 20px', background: theme.accent, color: '#fff', borderRadius: '8px', textDecoration: 'none', fontSize: '14px', fontWeight: 600, transition: 'filter 0.15s' },
 };
