@@ -299,7 +299,39 @@ impl Storable for User {
     }
 
     fn from_bytes(bytes: Cow<[u8]>) -> Self {
-        Decode!(bytes.as_ref(), Self).unwrap()
+        match Decode!(bytes.as_ref(), Self) {
+            Ok(u) => u,
+            Err(_) => {
+                // Try decoding as old User format (without last_active, sessions_hosted_count)
+                // by decoding into a partial struct and filling defaults
+                #[derive(CandidType, Deserialize)]
+                struct OldUser {
+                    principal: Principal,
+                    name: String,
+                    email: String,
+                    role: Role,
+                    status: UserStatus,
+                    out_of_office: Vec<OOOBlock>,
+                    notification_settings: NotificationSettings,
+                    created_at: u64,
+                    updated_at: u64,
+                }
+                let old = Decode!(bytes.as_ref(), OldUser).unwrap();
+                User {
+                    principal: old.principal,
+                    name: old.name,
+                    email: old.email,
+                    role: old.role,
+                    status: old.status,
+                    out_of_office: old.out_of_office,
+                    notification_settings: old.notification_settings,
+                    last_active: 0,
+                    sessions_hosted_count: 0,
+                    created_at: old.created_at,
+                    updated_at: old.updated_at,
+                }
+            }
+        }
     }
 
     const BOUND: Bound = Bound::Bounded {
@@ -314,7 +346,44 @@ impl Storable for EventSeries {
     }
 
     fn from_bytes(bytes: Cow<[u8]>) -> Self {
-        Decode!(bytes.as_ref(), Self).unwrap()
+        match Decode!(bytes.as_ref(), Self) {
+            Ok(s) => s,
+            Err(_) => {
+                // Try decoding as old EventSeries format (without color, paused)
+                #[derive(CandidType, Deserialize)]
+                struct OldEventSeries {
+                    series_id: [u8; 16],
+                    title: String,
+                    notes: String,
+                    link: Option<String>,
+                    frequency: Frequency,
+                    weekday: Weekday,
+                    weekday_ordinal: Option<WeekdayOrdinal>,
+                    start_date: u64,
+                    end_date: Option<u64>,
+                    default_duration_minutes: u32,
+                    created_at: u64,
+                    created_by: Principal,
+                }
+                let old = Decode!(bytes.as_ref(), OldEventSeries).unwrap();
+                EventSeries {
+                    series_id: old.series_id,
+                    title: old.title,
+                    notes: old.notes,
+                    link: old.link,
+                    frequency: old.frequency,
+                    weekday: old.weekday,
+                    weekday_ordinal: old.weekday_ordinal,
+                    start_date: old.start_date,
+                    end_date: old.end_date,
+                    default_duration_minutes: old.default_duration_minutes,
+                    color: None,
+                    paused: false,
+                    created_at: old.created_at,
+                    created_by: old.created_by,
+                }
+            }
+        }
     }
 
     const BOUND: Bound = Bound::Bounded {
