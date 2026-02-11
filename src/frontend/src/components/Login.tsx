@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { Button } from './ui';
 import { theme } from '../theme';
 
 export default function Login() {
   const { login, isAuthenticated, isAuthorized, isLoading } = useAuth();
   const navigate = useNavigate();
+  const [signingIn, setSigningIn] = useState(false);
   
   React.useEffect(() => {
     if (isAuthenticated && isAuthorized) {
@@ -16,7 +18,12 @@ export default function Login() {
   }, [isAuthenticated, isAuthorized, navigate]);
   
   const handleLogin = async () => {
-    await login();
+    setSigningIn(true);
+    try {
+      await login();
+    } finally {
+      setSigningIn(false);
+    }
   };
   
   if (isLoading) {
@@ -34,9 +41,14 @@ export default function Login() {
         <h1 style={styles.title}>Office Hours</h1>
         <p style={styles.subtitle}>Sign in to manage Yieldschool office hours</p>
         
-        <button onClick={handleLogin} style={styles.loginButton}>
+        <Button
+          variant="primary"
+          onClick={handleLogin}
+          loading={signingIn}
+          style={{ width: '100%', padding: '14px 24px', fontSize: '15px', borderRadius: '10px', marginBottom: '16px' }}
+        >
           Sign in with Internet Identity
-        </button>
+        </Button>
         
         <p style={styles.hint}>
           Secure, passwordless sign-in

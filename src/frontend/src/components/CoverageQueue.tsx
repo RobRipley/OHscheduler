@@ -251,8 +251,9 @@ export default function CoverageQueue() {
 
       {events.length === 0 ? (
         <div style={styles.emptyState}>
+          <div style={{ fontSize: '48px', marginBottom: '12px', opacity: 0.5 }}>✅</div>
           <h3 style={styles.emptyTitle}>All Covered</h3>
-          <p style={styles.emptyText}>No sessions need hosts right now.</p>
+          <p style={styles.emptyText}>No sessions need hosts right now. Great job, team!</p>
         </div>
       ) : (
         <div style={styles.list}>

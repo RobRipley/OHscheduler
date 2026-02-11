@@ -22,11 +22,11 @@ export default function AdminPanel() {
     <div>
       <h2 style={styles.pageTitle}>Admin Panel</h2>
       
-      <div style={styles.tabs}>
-        <NavLink to="/dashboard/admin" end style={tabStyle}>Users</NavLink>
-        <NavLink to="/dashboard/admin/series" style={tabStyle}>Event Series</NavLink>
-        <NavLink to="/dashboard/admin/settings" style={tabStyle}>Settings</NavLink>
-        <NavLink to="/dashboard/admin/reports" style={tabStyle}>Reports</NavLink>
+      <div style={styles.segmentedControl}>
+        <NavLink to="/dashboard/admin" end className={({ isActive }) => `admin-tab${isActive ? ' admin-tab-active' : ''}`}>Users</NavLink>
+        <NavLink to="/dashboard/admin/series" className={({ isActive }) => `admin-tab${isActive ? ' admin-tab-active' : ''}`}>Event Series</NavLink>
+        <NavLink to="/dashboard/admin/settings" className={({ isActive }) => `admin-tab${isActive ? ' admin-tab-active' : ''}`}>Settings</NavLink>
+        <NavLink to="/dashboard/admin/reports" className={({ isActive }) => `admin-tab${isActive ? ' admin-tab-active' : ''}`}>Reports</NavLink>
       </div>
       
       <div style={styles.content}>
@@ -953,6 +953,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   unauthorized: { padding: '60px 20px', textAlign: 'center', color: theme.textMuted },
   pageTitle: { margin: '0 0 24px 0', color: theme.textPrimary, fontSize: '20px', fontWeight: 600 },
   tabs: { display: 'flex', gap: '4px', marginBottom: '24px', borderBottom: `1px solid ${theme.border}`, paddingBottom: '12px' },
+  segmentedControl: { display: 'inline-flex', gap: '2px', padding: '3px', background: theme.surface, borderRadius: '8px', border: `1px solid ${theme.border}`, marginBottom: '24px' },
   tab: { padding: '8px 16px', background: 'transparent', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', color: theme.textMuted, textDecoration: 'none', transition: 'color 150ms ease-out' },
   tabActive: { color: theme.textPrimary, borderBottom: `2px solid ${theme.accent}`, marginBottom: '-13px', paddingBottom: '10px' },
   content: { background: theme.surface, borderRadius: '12px', padding: '24px', border: `1px solid ${theme.border}` },
