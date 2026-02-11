@@ -304,3 +304,32 @@ label[style*="text-transform: uppercase"] {
   background: rgba(99, 102, 241, 0.15) !important;
   color: #fff !important;
 }
+
+/* Phase 4: Mobile responsive public calendar */
+@media (max-width: 768px) {
+  .public-calendar-grid {
+    display: none !important;
+  }
+  .public-calendar-agenda {
+    display: block !important;
+  }
+  .public-header-row {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start !important;
+  }
+  .public-month-nav {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .next-session-banner {
+    flex-direction: column;
+    align-items: flex-start !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .public-calendar-agenda {
+    display: none !important;
+  }
+}

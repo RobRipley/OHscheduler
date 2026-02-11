@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Routes, Route, NavLink } from 'react-router-dom';
 import { useBackend, User, EventSeries, GlobalSettings, nanosToDate, bytesToHex, dateToNanos, CreateSeriesInput, isSessionExpiredError } from '../hooks/useBackend';
 import { useAuth } from '../hooks/useAuth';
@@ -656,6 +656,28 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
   const derivedWeekday = startDate ? new Date(startDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long' }) : null;
   const weekdayMap: Record<string, string> = { Sunday: 'Sun', Monday: 'Mon', Tuesday: 'Tue', Wednesday: 'Wed', Thursday: 'Thu', Friday: 'Fri', Saturday: 'Sat' };
 
+  // Preview next 5 occurrences
+  const previewDates = useMemo(() => {
+    if (!startDate || !startTime) return [];
+    const dates: Date[] = [];
+    const start = new Date(startDate + 'T' + startTime + ':00');
+    if (isNaN(start.getTime())) return [];
+    const intervalDays = frequency === 'Weekly' ? 7 : frequency === 'Biweekly' ? 14 : 0;
+    const end = endDate ? new Date(endDate + 'T23:59:59') : null;
+    let current = new Date(start);
+    for (let i = 0; i < 5 && (intervalDays > 0); i++) {
+      if (end && current > end) break;
+      dates.push(new Date(current));
+      if (frequency === 'Monthly') {
+        current = new Date(current);
+        current.setMonth(current.getMonth() + 1);
+      } else {
+        current = new Date(current.getTime() + intervalDays * 24 * 60 * 60 * 1000);
+      }
+    }
+    return dates;
+  }, [startDate, startTime, frequency, endDate]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!actor || !startDate || !derivedWeekday) return;
@@ -708,6 +730,18 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
         <div style={styles.formRowHalf}><label style={styles.label}>Start Time</label><input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} style={styles.input} required /></div>
       </div>
       <div style={styles.formRow}><label style={styles.label}>End Date (optional)</label><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={styles.input} /></div>
+      {previewDates.length > 0 && (
+        <div style={styles.previewSection}>
+          <div style={styles.previewTitle}>Preview — next {previewDates.length} occurrence{previewDates.length !== 1 ? 's' : ''}</div>
+          {previewDates.map((d, i) => (
+            <div key={i} style={styles.previewDate}>
+              {d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+              {' at '}
+              {d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+            </div>
+          ))}
+        </div>
+      )}
       <div style={styles.formActions}><button type="button" onClick={onCancel} style={styles.cancelBtn}>Cancel</button><button type="submit" disabled={loading} style={styles.submitBtn}>{loading ? 'Creating...' : 'Create Series'}</button></div>
     </form>
   );
@@ -936,6 +970,30 @@ function Reports() {
           ))}
         </div>
       )}
+
+      <h4 style={{ ...styles.reportSectionTitle, marginTop: '32px' }}>System Info</h4>
+      <div style={styles.systemInfo}>
+        <div style={styles.systemRow}>
+          <span style={styles.systemLabel}>Frontend Canister</span>
+          <code style={styles.systemValue}>{import.meta.env.VITE_FRONTEND_CANISTER_ID || '6sm6t-iiaaa-aaaad-aebwq-cai'}</code>
+        </div>
+        <div style={styles.systemRow}>
+          <span style={styles.systemLabel}>Backend Canister</span>
+          <code style={styles.systemValue}>{import.meta.env.VITE_BACKEND_CANISTER_ID || '6vnyh-fqaaa-aaaad-aebwa-cai'}</code>
+        </div>
+        <div style={styles.systemRow}>
+          <span style={styles.systemLabel}>Network</span>
+          <code style={styles.systemValue}>{import.meta.env.VITE_DFX_NETWORK || 'local'}</code>
+        </div>
+        <div style={styles.systemRow}>
+          <span style={styles.systemLabel}>Active Users</span>
+          <span style={styles.systemValue}>{users.filter(u => 'Active' in u.status).length}</span>
+        </div>
+        <div style={styles.systemRow}>
+          <span style={styles.systemLabel}>CycleOps Dashboard</span>
+          <a href="https://cycleops.dev" target="_blank" rel="noopener noreferrer" style={{ color: theme.accent, fontSize: '13px' }}>View cycle balance →</a>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1042,4 +1100,13 @@ const styles: { [key: string]: React.CSSProperties } = {
   // Action group styles
   actionGroup: { display: 'flex', gap: '6px', alignItems: 'center' },
   deleteBtn: { padding: '6px 10px', background: 'transparent', color: '#F87171', border: '1px solid rgba(248, 113, 113, 0.3)', borderRadius: '6px', cursor: 'pointer', fontSize: '16px', fontWeight: 600, lineHeight: 1, transition: 'all 150ms ease-out' },
+  // System info
+  systemInfo: { background: theme.surfaceElevated, borderRadius: '10px', padding: '4px 0', border: `1px solid ${theme.border}` },
+  systemRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderBottom: `1px solid ${theme.border}` },
+  systemLabel: { fontSize: '13px', color: theme.textMuted, fontWeight: 500 },
+  systemValue: { fontSize: '13px', color: theme.textSecondary, fontFamily: 'monospace' },
+  // Preview
+  previewSection: { margin: '16px 0', padding: '12px 16px', background: theme.surfaceElevated, borderRadius: '8px', border: `1px solid ${theme.border}` },
+  previewTitle: { fontSize: '11px', fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: '8px' },
+  previewDate: { fontSize: '13px', color: theme.textSecondary, padding: '3px 0' },
 };
