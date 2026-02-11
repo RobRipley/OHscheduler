@@ -52,7 +52,7 @@ fn days_to_nanos(days: i64) -> u64 {
 }
 
 /// Get year, month, day from nanoseconds timestamp
-fn nanos_to_ymd(nanos: u64) -> (i32, u32, u32) {
+pub fn nanos_to_ymd(nanos: u64) -> (i32, u32, u32) {
     // Simple algorithm: days since epoch -> date
     let days = nanos_to_days(nanos) as i32;
     
@@ -252,6 +252,10 @@ pub fn materialize_events(window_start: u64, window_end: u64) -> Vec<EventInstan
     
     // Generate instances from all series
     for series in storage::list_all_series() {
+        // Skip paused series
+        if series.paused {
+            continue;
+        }
         let occurrences = generate_occurrences(&series, window_start, window_end);
         let duration_nanos = (series.default_duration_minutes as u64) * 60 * 1_000_000_000;
         

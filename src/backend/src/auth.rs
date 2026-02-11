@@ -29,6 +29,14 @@ pub fn require_authorized() -> ApiResult<User> {
     }
 }
 
+/// Update last_active for the caller (call on update endpoints)
+pub fn touch_last_active(principal: &Principal) {
+    if let Some(mut user) = storage::get_user(principal) {
+        user.last_active = ic_cdk::api::time();
+        storage::update_user(user);
+    }
+}
+
 /// Check if caller is an admin
 pub fn require_admin() -> ApiResult<User> {
     let user = require_authorized()?;
@@ -75,6 +83,8 @@ pub fn initialize_admin(principal: Principal, name: String, email: String) {
         status: UserStatus::Active,
         out_of_office: vec![],
         notification_settings: NotificationSettings::default(),
+        last_active: now,
+        sessions_hosted_count: 0,
         created_at: now,
         updated_at: now,
     };

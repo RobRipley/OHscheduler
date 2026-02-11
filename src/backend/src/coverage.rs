@@ -33,7 +33,7 @@ pub fn assign_host(
     }
     
     // Validate host exists and can be assigned
-    let host_user = storage::get_user(&host_principal)
+    let mut host_user = storage::get_user(&host_principal)
         .ok_or(ApiError::NotFound)?;
     
     // Get event timing for OOO check
@@ -89,6 +89,11 @@ pub fn assign_host(
         // Create notification job
         notifications::create_host_assigned_notification(&host_user, &instance_id, event_start, event_end);
     }
+    
+    // Increment sessions_hosted_count for the assigned host
+    host_user.sessions_hosted_count = host_user.sessions_hosted_count.saturating_add(1);
+    host_user.updated_at = now;
+    storage::update_user(host_user);
     
     // Re-materialize to return updated instance
     get_event_instance(series_id, occurrence_start, &instance_id)
