@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useBackend, EventInstance, User, nanosToDate, bytesToHex, isSessionExpiredError } from '../hooks/useBackend';
 import { useAuth } from '../hooks/useAuth';
 import { useTimezone } from '../hooks/useTimezone';
@@ -19,6 +19,7 @@ export default function CoverageQueue() {
   const [assigningId, setAssigningId] = useState<string | null>(null);
   const [selectedHosts, setSelectedHosts] = useState<Record<string, string>>({});
   const [coveredIds, setCoveredIds] = useState<Set<string>>(new Set()); // Track covered events
+  const [fadingIds, setFadingIds] = useState<Set<string>>(new Set()); // Track events fading out
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   // Fetch unclaimed events
@@ -105,8 +106,16 @@ export default function CoverageQueue() {
       
       if ('Ok' in result) {
         showToast(`Assigned to ${hostUser?.name || 'host'}`);
-        // Mark as covered instead of removing
+        // Mark as covered, start fade-out after delay
         setCoveredIds(prev => new Set(prev).add(eventKey));
+        setTimeout(() => {
+          setFadingIds(prev => new Set(prev).add(eventKey));
+        }, 1500);
+        setTimeout(() => {
+          setEvents(prev => prev.filter(e => bytesToHex(e.instance_id as number[]) !== eventKey));
+          setCoveredIds(prev => { const next = new Set(prev); next.delete(eventKey); return next; });
+          setFadingIds(prev => { const next = new Set(prev); next.delete(eventKey); return next; });
+        }, 2500);
         // Clear selection
         setSelectedHosts(prev => {
           const next = { ...prev };
@@ -123,6 +132,36 @@ export default function CoverageQueue() {
       } else {
         showToast('Failed to assign host', 'error');
       }
+    } finally {
+      setAssigningId(null);
+    }
+  };
+
+  // One-click self-assign
+  const handleClaim = async (event: EventInstance) => {
+    if (!actor || !user) return;
+    const eventKey = bytesToHex(event.instance_id as number[]);
+    setAssigningId(eventKey);
+    try {
+      const seriesId = event.series_id;
+      const occurrenceStart = (seriesId && seriesId.length > 0) ? [event.start_utc] : [];
+      const result = await actor.assign_host(seriesId, occurrenceStart, event.instance_id, user.principal);
+      if ('Ok' in result) {
+        showToast(`Claimed by you!`);
+        setCoveredIds(prev => new Set(prev).add(eventKey));
+        setSelectedHosts(prev => ({ ...prev, [eventKey]: user.principal.toText() }));
+        setTimeout(() => { setFadingIds(prev => new Set(prev).add(eventKey)); }, 1500);
+        setTimeout(() => {
+          setEvents(prev => prev.filter(e => bytesToHex(e.instance_id as number[]) !== eventKey));
+          setCoveredIds(prev => { const next = new Set(prev); next.delete(eventKey); return next; });
+          setFadingIds(prev => { const next = new Set(prev); next.delete(eventKey); return next; });
+        }, 2500);
+      } else {
+        showToast(getErrorMessage(result.Err), 'error');
+      }
+    } catch (err) {
+      if (isSessionExpiredError(err)) { triggerSessionExpired(); showToast('Session expired.', 'error'); }
+      else { showToast('Failed to claim', 'error'); }
     } finally {
       setAssigningId(null);
     }
@@ -147,6 +186,31 @@ export default function CoverageQueue() {
       timeZone: timezone 
     });
   };
+
+  // Group events by time period
+  const groupedEvents = useMemo(() => {
+    const now = new Date();
+    const endOfWeek = new Date(now);
+    endOfWeek.setDate(now.getDate() + (7 - now.getDay()));
+    endOfWeek.setHours(23, 59, 59, 999);
+    const endOfNextWeek = new Date(endOfWeek);
+    endOfNextWeek.setDate(endOfNextWeek.getDate() + 7);
+
+    const groups: { label: string; events: EventInstance[] }[] = [
+      { label: 'This Week', events: [] },
+      { label: 'Next Week', events: [] },
+      { label: 'Later', events: [] },
+    ];
+
+    events.forEach(event => {
+      const eventDate = nanosToDate(event.start_utc);
+      if (eventDate <= endOfWeek) groups[0].events.push(event);
+      else if (eventDate <= endOfNextWeek) groups[1].events.push(event);
+      else groups[2].events.push(event);
+    });
+
+    return groups.filter(g => g.events.length > 0);
+  }, [events]);
 
   if (actorLoading || loading) {
     return (
@@ -192,40 +256,59 @@ export default function CoverageQueue() {
         </div>
       ) : (
         <div style={styles.list}>
-          {events.map(event => {
+          {groupedEvents.map(group => (
+            <div key={group.label}>
+              <div style={styles.groupLabel}>{group.label}</div>
+              {group.events.map(event => {
             const eventKey = bytesToHex(event.instance_id as number[]);
             const isAssigning = assigningId === eventKey;
             const isCovered = coveredIds.has(eventKey);
+            const isFading = fadingIds.has(eventKey);
             const selectedHost = selectedHosts[eventKey] || '';
             const assignedHostName = isCovered 
               ? users.find(u => u.principal.toText() === selectedHost)?.name 
               : null;
             
             return (
-              <div key={eventKey} style={styles.card}>
-                {/* Left: event info */}
-                <div style={styles.cardLeft}>
-                  <span style={styles.dateText}>
-                    {formatDateInZone(nanosToDate(event.start_utc))}
-                  </span>
-                  <div style={styles.eventTitle}>{event.title}</div>
-                  <div style={styles.eventTime}>
-                    {formatTimeInZone(event.start_utc)} – {formatTimeInZone(event.end_utc)}
-                    <span style={styles.tzLabel}>{abbrev}</span>
+              <div key={eventKey} style={{
+                ...styles.card,
+                ...(isFading ? styles.cardFading : {}),
+                ...(isCovered ? styles.cardCovered : {}),
+              }}>
+                {/* Row 1: Event info + badge */}
+                <div style={styles.cardRow1}>
+                  <div style={styles.cardLeft}>
+                    <span style={styles.dateText}>
+                      {formatDateInZone(nanosToDate(event.start_utc))}
+                    </span>
+                    <div style={styles.eventTitle}>{event.title}</div>
+                    <div style={styles.eventTime}>
+                      {formatTimeInZone(event.start_utc)} – {formatTimeInZone(event.end_utc)}
+                      <span style={styles.tzLabel}>{abbrev}</span>
+                    </div>
                   </div>
-                </div>
-                
-                {/* Middle: notes (if any) */}
-                {event.notes && (
-                  <div style={styles.notesMid}>{event.notes}</div>
-                )}
-                
-                {/* Right: badge + assign controls */}
-                <div style={styles.cardRight}>
+                  {event.notes && (
+                    <div style={styles.notesMid}>{event.notes}</div>
+                  )}
                   <span style={isCovered ? styles.coveredBadge : styles.needsHostBadge}>
                     {isCovered ? 'Covered' : 'Needs Host'}
                   </span>
-                  {!isCovered && (
+                </div>
+
+                {/* Row 2: Action row */}
+                {!isCovered && (
+                  <div style={styles.cardRow2}>
+                    {user && (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleClaim(event)}
+                        loading={isAssigning && !selectedHost}
+                        disabled={isAssigning}
+                      >
+                        Claim
+                      </Button>
+                    )}
                     <div style={styles.assignRow}>
                       <Select
                         options={(() => {
@@ -251,22 +334,24 @@ export default function CoverageQueue() {
                         variant="primary"
                         size="sm"
                         onClick={() => handleAssign(event)}
-                        loading={isAssigning}
+                        loading={isAssigning && !!selectedHost}
                         disabled={!selectedHost}
                       >
                         Assign
                       </Button>
                     </div>
-                  )}
-                  {isCovered && assignedHostName && (
-                    <div style={styles.assignedHost}>
-                      Assigned to {assignedHostName}
-                    </div>
-                  )}
-                </div>
+                  </div>
+                )}
+                {isCovered && assignedHostName && (
+                  <div style={styles.assignedHost}>
+                    ✓ Assigned to {assignedHostName}
+                  </div>
+                )}
               </div>
             );
           })}
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -369,11 +454,31 @@ const styles: { [key: string]: React.CSSProperties } = {
   card: {
     background: theme.surface,
     borderRadius: '12px',
-    padding: '12px 16px',
+    padding: '14px 16px',
     border: `1px solid ${theme.border}`,
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '12px',
+    transition: 'opacity 0.8s ease-out, transform 0.8s ease-out',
+  },
+  cardCovered: {
+    borderColor: 'rgba(52, 211, 153, 0.3)',
+  },
+  cardFading: {
+    opacity: 0,
+    transform: 'translateX(40px)',
+  },
+  cardRow1: {
     display: 'flex',
     alignItems: 'center',
     gap: '16px',
+  },
+  cardRow2: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    paddingTop: '4px',
+    borderTop: `1px solid ${theme.border}`,
   },
   cardLeft: {
     flex: '0 0 auto',
@@ -466,7 +571,14 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '14px',
     color: '#34D399',
     fontWeight: 500,
-    marginTop: '4px',
-    textAlign: 'right',
+    padding: '4px 0',
+  },
+  groupLabel: {
+    fontSize: '11px',
+    fontWeight: 700,
+    color: theme.textMuted,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.08em',
+    padding: '16px 0 8px 0',
   },
 };
