@@ -392,8 +392,11 @@ export default function Calendar() {
                   )}
                   <div
                     style={{
-                      ...styles.agendaCard,
-                      borderLeftColor: color.border,
+                      display: 'flex', alignItems: 'center', gap: '16px', padding: '14px 16px',
+                      marginLeft: '18px', borderLeft: `3px solid ${color.border}`,
+                      background: theme.surface, borderRadius: '8px', marginBottom: '6px',
+                      cursor: 'pointer', transition: 'filter 0.15s, transform 0.15s',
+                      border: `1px solid ${theme.border}`, borderLeftWidth: '3px', borderLeftStyle: 'solid', borderLeftColor: color.border,
                       opacity: isPast ? 0.5 : 1,
                     }}
                     className="event-card-hover"
