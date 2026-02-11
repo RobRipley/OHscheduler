@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useBackend, EventInstance, nanosToDate, dateToNanos, bytesToHex, User, isSessionExpiredError } from '../hooks/useBackend';
 import { useAuth } from '../hooks/useAuth';
 import { useTimezone } from '../hooks/useTimezone';
+import { Modal, Button, Select } from './ui';
+import type { SelectOption } from './ui';
 import { theme } from '../theme';
 
 interface CalendarEvent extends EventInstance {
@@ -487,11 +489,15 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
     }
   };
 
+  // Build select options for host picker
+  const hostOptions: SelectOption[] = activeUsers.map(u => ({
+    value: u.principal.toText(),
+    label: u.name,
+    sublabel: u.email || undefined,
+  }));
+
   return (
-    <div style={modalStyles.overlay} onClick={onClose}>
-      <div style={modalStyles.modal} onClick={e => e.stopPropagation()}>
-        <button style={modalStyles.closeBtn} onClick={onClose}>×</button>
-        <h3 style={modalStyles.title}>{event.title}</h3>
+    <Modal open={true} onClose={onClose} title={event.title} maxWidth="420px">
         {isCancelled && <div style={modalStyles.cancelledBadge}>Cancelled</div>}
         <div style={modalStyles.detail}>
           <span style={modalStyles.detailLabel}>Date</span>
@@ -526,36 +532,31 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
         <div style={modalStyles.actions}>
           {!isCancelled && isNoHost && (
             <div style={modalStyles.assignSection}>
-              <select
-                style={modalStyles.userSelect}
+              <Select
+                options={hostOptions}
                 value={selectedUserId}
-                onChange={e => setSelectedUserId(e.target.value)}
-              >
-                <option value="">Select a host...</option>
-                {activeUsers.map(u => (
-                  <option key={u.principal.toText()} value={u.principal.toText()}>
-                    {u.name}
-                  </option>
-                ))}
-              </select>
-              <button style={modalStyles.primaryBtn} onClick={handleAssignHost} disabled={actionLoading || !selectedUserId}>
-                {actionLoading ? 'Saving...' : 'Assign host'}
-              </button>
+                onChange={setSelectedUserId}
+                placeholder="Select a host..."
+                searchable={activeUsers.length > 5}
+                style={{ flex: 1 }}
+              />
+              <Button variant="primary" onClick={handleAssignHost} loading={actionLoading} disabled={!selectedUserId}>
+                Assign host
+              </Button>
             </div>
           )}
           {!isCancelled && isHost && (
-            <button style={modalStyles.secondaryBtn} onClick={handleRemoveHost} disabled={actionLoading}>
-              {actionLoading ? 'Removing...' : 'Remove myself'}
-            </button>
+            <Button variant="secondary" onClick={handleRemoveHost} loading={actionLoading}>
+              Remove myself
+            </Button>
           )}
           {!isCancelled && event.host_principal.length > 0 && (
-            <button style={modalStyles.secondaryBtn} onClick={handleDownloadIcs} disabled={icsLoading}>
-              {icsLoading ? 'Generating...' : 'Add to calendar'}
-            </button>
+            <Button variant="secondary" onClick={handleDownloadIcs} loading={icsLoading}>
+              Add to calendar
+            </Button>
           )}
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -604,10 +605,7 @@ function CreateEventModal({ actor, triggerSessionExpired, onClose, onCreated }: 
   };
 
   return (
-    <div style={modalStyles.overlay} onClick={onClose}>
-      <div style={modalStyles.modal} onClick={e => e.stopPropagation()}>
-        <button style={modalStyles.closeBtn} onClick={onClose}>×</button>
-        <h3 style={modalStyles.title}>Create Event</h3>
+    <Modal open={true} onClose={onClose} title="Create Event" maxWidth="420px">
         {error && <div style={modalStyles.error}>{error}</div>}
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={createStyles.field}>
@@ -643,12 +641,11 @@ function CreateEventModal({ actor, triggerSessionExpired, onClose, onCreated }: 
             </select>
           </div>
           <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' }}>
-            <button type="button" onClick={onClose} style={createStyles.cancelBtn}>Cancel</button>
-            <button type="submit" disabled={loading} style={createStyles.submitBtn}>{loading ? 'Creating...' : 'Create Event'}</button>
+            <Button variant="secondary" onClick={onClose} type="button">Cancel</Button>
+            <Button variant="primary" type="submit" loading={loading}>Create Event</Button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
