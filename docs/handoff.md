@@ -256,6 +256,7 @@ dfx canister call backend create_event_series '(record {
 | 2026-02-11 | 8 | 📋 | Email integration specification written (Section 13 below) |
 | 2026-02-11 | 9 | ✅ | UX Phase 2 component library: Modal, ConfirmDialog, Button, Select, Toggle, Skeleton, Avatar. All modals/selects/confirms/toggles/loading states replaced across Calendar, CoverageQueue, AdminPanel. Deployed and tested on mainnet. Merged to main. |
 | 2026-02-11 | 10 | ✅ | UX Phase 3 page-level polish (15/15 items): Public calendar event modal + next session banner + month stats; Coverage Queue two-row cards + time grouping + Claim button + covered fade-out; Calendar hover + meeting link icons + taller cells; Login loading state; Admin segmented control; Series card hierarchy refactor. Deployed and tested on mainnet. Merged to main. |
+| 2026-02-11 | 11 | ✅ | UX Phase 4 feature enhancements (5/14 frontend items): Per-series color coding (8 hues) across all calendar views; Coverage Queue filter by series + sort toggle; Mobile responsive public calendar with agenda view; Admin System Info panel (canister IDs, network, users, CycleOps link); Series creation instance preview (next 5 occurrences). Deployed and tested on mainnet. Merged to main. |
 
 ---
 
