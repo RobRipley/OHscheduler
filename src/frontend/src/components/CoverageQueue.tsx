@@ -21,6 +21,8 @@ export default function CoverageQueue() {
   const [coveredIds, setCoveredIds] = useState<Set<string>>(new Set()); // Track covered events
   const [fadingIds, setFadingIds] = useState<Set<string>>(new Set()); // Track events fading out
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [filterSeries, setFilterSeries] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'date' | 'series'>('date');
 
   // Fetch unclaimed events
   const fetchEvents = useCallback(async () => {
@@ -187,6 +189,24 @@ export default function CoverageQueue() {
     });
   };
 
+  // Unique series titles for filter
+  const seriesTitles = useMemo(() => {
+    const titles = [...new Set(events.map(e => e.title))];
+    return titles.sort();
+  }, [events]);
+
+  // Filtered events
+  const filteredEvents = useMemo(() => {
+    let filtered = events;
+    if (filterSeries !== 'all') {
+      filtered = filtered.filter(e => e.title === filterSeries);
+    }
+    if (sortBy === 'series') {
+      filtered = [...filtered].sort((a, b) => a.title.localeCompare(b.title) || (a.start_utc < b.start_utc ? -1 : 1));
+    }
+    return filtered;
+  }, [events, filterSeries, sortBy]);
+
   // Group events by time period
   const groupedEvents = useMemo(() => {
     const now = new Date();
@@ -202,7 +222,7 @@ export default function CoverageQueue() {
       { label: 'Later', events: [] },
     ];
 
-    events.forEach(event => {
+    filteredEvents.forEach(event => {
       const eventDate = nanosToDate(event.start_utc);
       if (eventDate <= endOfWeek) groups[0].events.push(event);
       else if (eventDate <= endOfNextWeek) groups[1].events.push(event);
@@ -210,7 +230,7 @@ export default function CoverageQueue() {
     });
 
     return groups.filter(g => g.events.length > 0);
-  }, [events]);
+  }, [filteredEvents]);
 
   if (actorLoading || loading) {
     return (
@@ -248,6 +268,36 @@ export default function CoverageQueue() {
       </div>
 
       {error && <div style={styles.error}>{error}</div>}
+
+      {/* Filters */}
+      {events.length > 0 && (
+        <div style={styles.filterBar}>
+          <div style={styles.filterGroup}>
+            <label style={styles.filterLabel}>Series</label>
+            <select
+              value={filterSeries}
+              onChange={e => setFilterSeries(e.target.value)}
+              style={styles.filterSelect}
+            >
+              <option value="all">All ({events.length})</option>
+              {seriesTitles.map(t => (
+                <option key={t} value={t}>{t} ({events.filter(e => e.title === t).length})</option>
+              ))}
+            </select>
+          </div>
+          <div style={styles.filterGroup}>
+            <label style={styles.filterLabel}>Sort</label>
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value as 'date' | 'series')}
+              style={styles.filterSelect}
+            >
+              <option value="date">By date</option>
+              <option value="series">By series</option>
+            </select>
+          </div>
+        </div>
+      )}
 
       {events.length === 0 ? (
         <div style={styles.emptyState}>
@@ -581,5 +631,32 @@ const styles: { [key: string]: React.CSSProperties } = {
     textTransform: 'uppercase' as const,
     letterSpacing: '0.08em',
     padding: '16px 0 8px 0',
+  },
+  filterBar: {
+    display: 'flex',
+    gap: '16px',
+    marginBottom: '16px',
+    alignItems: 'center',
+  },
+  filterGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+  },
+  filterLabel: {
+    fontSize: '12px',
+    fontWeight: 600,
+    color: theme.textMuted,
+    textTransform: 'uppercase' as const,
+    letterSpacing: '0.05em',
+  },
+  filterSelect: {
+    padding: '6px 10px',
+    background: theme.surface,
+    color: theme.textSecondary,
+    border: `1px solid ${theme.border}`,
+    borderRadius: '6px',
+    fontSize: '13px',
+    cursor: 'pointer',
   },
 };

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Actor, HttpAgent } from '@dfinity/agent';
 import { useAuth } from '../hooks/useAuth';
 import { TIMEZONE_LIST, getTimezoneAbbrev } from '../hooks/useTimezone';
+import { getSeriesColor, NO_HOST_COLOR } from '../utils/seriesColors';
 import { Modal, Button, SkeletonCalendar } from './ui';
 import { theme } from '../theme';
 
@@ -334,10 +335,12 @@ export default function PublicCalendar() {
                         {dayEvents.filter(e => 'Active' in e.status).slice(0, 4).map((event, idx) => {
                           const isNoHost = event.host_name.length === 0;
                           const hostName = isNoHost ? 'No host' : event.host_name[0];
+                          const color = isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title);
                           return (
                             <div key={idx} style={{
                               ...styles.eventCard,
-                              ...(isNoHost ? styles.eventNoHost : styles.eventAssigned),
+                              background: color.bg,
+                              borderLeftColor: color.border,
                               cursor: 'pointer',
                             }} onClick={() => setSelectedEvent(event)} className="event-card-hover">
                               <div style={styles.eventTitle}>{event.title}</div>

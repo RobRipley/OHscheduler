@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useTimezone } from '../hooks/useTimezone';
 import { Modal, Button, Select, SkeletonCalendar } from './ui';
 import type { SelectOption } from './ui';
+import { getSeriesColor, NO_HOST_COLOR } from '../utils/seriesColors';
 import { theme } from '../theme';
 
 interface CalendarEvent extends EventInstance {
@@ -279,12 +280,14 @@ export default function Calendar() {
                       {dayEvents.slice(0, 4).map(event => {
                         const isNoHost = event.host_principal.length === 0;
                         const hostName = getHostName(event.host_principal);
+                        const color = isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title);
                         return (
                           <div
                             key={bytesToHex(event.instance_id as number[])}
                             style={{
                               ...styles.monthEventCard,
-                              ...(isNoHost ? styles.monthEventNoHost : styles.monthEventAssigned),
+                              background: color.bg,
+                              borderLeftColor: color.border,
                             }}
                             className="event-card-hover"
                             onClick={() => setSelectedEvent(event)}
@@ -331,23 +334,29 @@ export default function Calendar() {
                   {dayEvents.length === 0 ? (
                     <div style={styles.noEvents}>—</div>
                   ) : (
-                    dayEvents.map(event => (
+                    dayEvents.map(event => {
+                      const isNoHost = event.host_principal.length === 0;
+                      const color = isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title);
+                      return (
                       <div
                         key={bytesToHex(event.instance_id as number[])}
                         style={{
                           ...styles.eventCard,
                           ...('Cancelled' in event.status ? styles.eventCancelled : {}),
-                          ...(event.host_principal.length === 0 ? styles.eventNoHost : {}),
+                          background: color.bg,
+                          borderLeftColor: color.border,
                         }}
+                        className="event-card-hover"
                         onClick={() => setSelectedEvent(event)}
                       >
                         <div style={styles.eventTime}>
                           {formatTimeInTz(event.start_utc)}
                         </div>
                         <div style={styles.eventTitle}>{event.title}</div>
-                        <div style={event.host_principal.length === 0 ? styles.eventHostNoHost : styles.eventHost}>{getHostName(event.host_principal)}</div>
+                        <div style={isNoHost ? styles.eventHostNoHost : styles.eventHost}>{getHostName(event.host_principal)}</div>
                       </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>
