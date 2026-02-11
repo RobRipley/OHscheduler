@@ -159,6 +159,7 @@ function UserManagement() {
               <th style={styles.th}>Email</th>
               <th style={styles.th}>Role</th>
               <th style={styles.th}>Status</th>
+              <th style={styles.th}>Hosted</th>
               <th style={styles.th}>Actions</th>
             </tr>
           </thead>
@@ -186,6 +187,9 @@ function UserManagement() {
                     ) : (
                       <span style={isActive ? styles.activeBadge : styles.disabledBadge}>{isActive ? 'Active' : 'Disabled'}</span>
                     )}
+                  </td>
+                  <td style={styles.td}>
+                    <span style={{ color: theme.textSecondary }}>{user.sessions_hosted_count?.toString() || '0'}</span>
                   </td>
                   <td style={styles.td}>
                     <div style={styles.actionGroup}>
@@ -547,6 +551,22 @@ function EventSeriesManagement() {
     }
   };
 
+  const handleTogglePause = async (s: any) => {
+    if (!actor) return;
+    try {
+      const result = await actor.toggle_series_pause(s.series_id);
+      if ('Ok' in result) fetchSeries();
+      else setError(getErrorMessage(result.Err));
+    } catch (err) {
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setError('Your session has expired. Please sign in again.');
+      } else {
+        setError('Failed to toggle pause');
+      }
+    }
+  };
+
   const getFrequencyLabel = (freq: any) => {
     if ('Weekly' in freq) return 'Weekly';
     if ('Biweekly' in freq) return 'Biweekly';
@@ -614,9 +634,12 @@ function EventSeriesManagement() {
           {series.map(s => {
             const key = bytesToHex(s.series_id as number[]);
             return (
-              <div key={key} style={styles.seriesCard}>
+              <div key={key} style={{ ...styles.seriesCard, ...(s.paused ? { opacity: 0.6 } : {}) }}>
                 <div style={styles.seriesInfo}>
-                  <div style={styles.seriesTitle}>{s.title}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={styles.seriesTitle}>{s.title}</div>
+                    {s.paused && <span style={{ fontSize: '11px', fontWeight: 600, color: '#FBBF24', background: 'rgba(251, 191, 36, 0.15)', padding: '2px 8px', borderRadius: '4px' }}>Paused</span>}
+                  </div>
                   <div style={styles.seriesMeta}>
                     {getFrequencyLabel(s.frequency)} on {getWeekdayLabel(s.weekday)}s at {formatTime(s.start_date)} · {s.default_duration_minutes} min
                   </div>
@@ -627,6 +650,7 @@ function EventSeriesManagement() {
                   {s.notes && <div style={styles.seriesNotes}>{s.notes}</div>}
                 </div>
                 <div style={styles.seriesActions}>
+                  <button style={styles.iconBtn} onClick={() => handleTogglePause(s)}>{s.paused ? 'Resume' : 'Pause'}</button>
                   <button style={styles.iconBtn} onClick={() => { setEditingSeries(s); setShowAddForm(false); }}>Edit</button>
                   <button style={styles.iconBtnDanger} onClick={() => handleDelete(s)} disabled={deletingId === key}>
                     {deletingId === key ? '...' : 'Delete'}
@@ -951,7 +975,27 @@ function Reports() {
   return (
     <div>
       <h3 style={styles.sectionTitle}>Coverage Reports</h3>
-      <p style={styles.reportSubtitle}>Next 60 days</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <p style={styles.reportSubtitle}>Next 60 days</p>
+        <button style={styles.addBtn} onClick={async () => {
+          if (!actor) return;
+          try {
+            const now = new Date();
+            const start = dateToNanos(now);
+            const end = dateToNanos(new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000));
+            const result = await actor.export_events_csv(start, end);
+            if ('Ok' in result) {
+              const blob = new Blob([result.Ok], { type: 'text/csv' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `office-hours-export-${now.toISOString().split('T')[0]}.csv`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }
+          } catch (err) { console.error('CSV export failed', err); }
+        }}>Export CSV</button>
+      </div>
       <div style={styles.statsGrid}>
         <div style={styles.statCard}><div style={styles.statValue}>{totalEvents}</div><div style={styles.statLabel}>Total Sessions</div></div>
         <div style={styles.statCard}><div style={{ ...styles.statValue, color: theme.accent }}>{assignedEvents}</div><div style={styles.statLabel}>Assigned</div></div>

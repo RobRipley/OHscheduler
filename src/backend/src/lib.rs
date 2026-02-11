@@ -105,6 +105,8 @@ fn authorize_user(principal: Principal, name: String, email: String, role: Role)
         status: UserStatus::Active,
         out_of_office: vec![],
         notification_settings: NotificationSettings::default(),
+        last_active: now,
+        sessions_hosted_count: 0,
         created_at: now,
         updated_at: now,
     };
@@ -280,6 +282,7 @@ fn create_event_series(input: CreateSeriesInput) -> ApiResult<EventSeries> {
         default_duration_minutes: input.default_duration_minutes
             .unwrap_or(settings.default_event_duration_minutes),
         color: input.color,
+        paused: false,
         created_at: now,
         created_by: admin.principal,
     };
@@ -313,6 +316,9 @@ fn update_event_series(series_id: Vec<u8>, input: UpdateSeriesInput) -> ApiResul
     }
     if let Some(color) = input.color {
         series.color = color;
+    }
+    if let Some(paused) = input.paused {
+        series.paused = paused;
     }
     
     storage::insert_series(series.clone());
@@ -358,6 +364,7 @@ fn assign_host(
     host_principal: Principal,
 ) -> ApiResult<EventInstance> {
     let user = auth::require_authorized()?;
+    auth::touch_last_active(&user.principal);
     
     let sid = series_id
         .map(|v| v.try_into().map_err(|_| ApiError::InvalidInput("Invalid series_id".to_string())))
@@ -420,6 +427,64 @@ fn update_global_settings(settings: GlobalSettings) -> ApiResult<()> {
 fn get_global_settings() -> ApiResult<GlobalSettings> {
     auth::require_authorized()?;
     Ok(storage::get_settings())
+}
+
+/// Toggle pause/resume on a series (admin only)
+#[update]
+fn toggle_series_pause(series_id: Vec<u8>) -> ApiResult<EventSeries> {
+    auth::require_admin()?;
+    
+    let sid: [u8; 16] = series_id.try_into()
+        .map_err(|_| ApiError::InvalidInput("Invalid series_id".to_string()))?;
+    
+    let mut series = storage::get_series(&sid)
+        .ok_or(ApiError::NotFound)?;
+    
+    series.paused = !series.paused;
+    storage::insert_series(series.clone());
+    Ok(series)
+}
+
+/// Export events as CSV (admin only)
+#[query]
+fn export_events_csv(window_start: u64, window_end: u64) -> ApiResult<String> {
+    auth::require_admin()?;
+    
+    let events = recurrence::materialize_events(window_start, window_end);
+    let users = storage::list_all_users();
+    
+    let mut csv = String::from("Date,Time (UTC),Title,Host,Status,Series,Duration (min)\n");
+    
+    for e in &events {
+        let host_name = e.host_principal
+            .and_then(|p| users.iter().find(|u| u.principal == p))
+            .map(|u| u.name.clone())
+            .unwrap_or_else(|| "Unassigned".to_string());
+        
+        let status = if e.status == EventStatus::Active { "Active" } else { "Cancelled" };
+        let is_series = if e.series_id.is_some() { "Yes" } else { "No" };
+        let duration_min = (e.end_utc.saturating_sub(e.start_utc)) / 1_000_000_000 / 60;
+        
+        // Format timestamp as ISO-ish date/time
+        let (y, m, d) = recurrence::nanos_to_ymd(e.start_utc);
+        let secs_in_day = (e.start_utc / 1_000_000_000) % 86400;
+        let hour = secs_in_day / 3600;
+        let min = (secs_in_day % 3600) / 60;
+        
+        // Escape title for CSV
+        let title_escaped = if e.title.contains(',') || e.title.contains('"') {
+            format!("\"{}\"", e.title.replace('"', "\"\""))
+        } else {
+            e.title.clone()
+        };
+        
+        csv.push_str(&format!(
+            "{:04}-{:02}-{:02},{:02}:{:02},{},{},{},{},{}\n",
+            y, m, d, hour, min, title_escaped, host_name, status, is_series, duration_min
+        ));
+    }
+    
+    Ok(csv)
 }
 
 // ============================================================================

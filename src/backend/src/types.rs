@@ -116,6 +116,8 @@ pub struct User {
     pub status: UserStatus,
     pub out_of_office: Vec<OOOBlock>,
     pub notification_settings: NotificationSettings,
+    pub last_active: u64,
+    pub sessions_hosted_count: u32,
     pub created_at: u64,
     pub updated_at: u64,
 }
@@ -133,6 +135,7 @@ pub struct EventSeries {
     pub end_date: Option<u64>,
     pub default_duration_minutes: u32,
     pub color: Option<String>,
+    pub paused: bool,
     pub created_at: u64,
     pub created_by: Principal,
 }
@@ -243,6 +246,7 @@ pub struct UpdateSeriesInput {
     pub end_date: Option<Option<u64>>,
     pub default_duration_minutes: Option<u32>,
     pub color: Option<Option<String>>,  // None = don't change, Some(None) = clear, Some(Some(x)) = set to x
+    pub paused: Option<bool>,
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug)]

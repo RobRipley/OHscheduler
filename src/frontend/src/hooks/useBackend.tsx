@@ -40,6 +40,8 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'status': UserStatus,
     'out_of_office': IDL.Vec(OOOBlock),
     'notification_settings': NotificationSettings,
+    'last_active': IDL.Nat64,
+    'sessions_hosted_count': IDL.Nat32,
     'created_at': IDL.Nat64,
     'updated_at': IDL.Nat64,
   });
@@ -55,6 +57,8 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'start_date': IDL.Nat64,
     'end_date': IDL.Opt(IDL.Nat64),
     'default_duration_minutes': IDL.Nat32,
+    'color': IDL.Opt(IDL.Text),
+    'paused': IDL.Bool,
     'created_at': IDL.Nat64,
     'created_by': IDL.Principal,
   });
@@ -106,6 +110,8 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'notes': IDL.Opt(IDL.Text),
     'end_date': IDL.Opt(IDL.Opt(IDL.Nat64)),
     'default_duration_minutes': IDL.Opt(IDL.Nat32),
+    'color': IDL.Opt(IDL.Opt(IDL.Text)),
+    'paused': IDL.Opt(IDL.Bool),
   });
 
   const ApiError = IDL.Variant({
@@ -152,6 +158,12 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'delete_event_series': IDL.Func([IDL.Vec(IDL.Nat8)], [Result_Unit], []),
     'list_event_series': IDL.Func([], [Result_Vec_EventSeries], ['query']),
 
+    // Series Pause/Resume
+    'toggle_series_pause': IDL.Func([IDL.Vec(IDL.Nat8)], [Result_EventSeries], []),
+
+    // CSV Export
+    'export_events_csv': IDL.Func([IDL.Nat64, IDL.Nat64], [Result_String], ['query']),
+
     // Coverage Queue
     'assign_host': IDL.Func(
       [IDL.Opt(IDL.Vec(IDL.Nat8)), IDL.Opt(IDL.Nat64), IDL.Vec(IDL.Nat8), IDL.Principal], 
@@ -183,6 +195,8 @@ export interface User {
   status: { Active: null } | { Disabled: null };
   out_of_office: OOOBlock[];
   notification_settings: NotificationSettings;
+  last_active: bigint;
+  sessions_hosted_count: number;
   created_at: bigint;
   updated_at: bigint;
 }
@@ -226,6 +240,8 @@ export interface EventSeries {
   start_date: bigint;
   end_date: [bigint] | [];
   default_duration_minutes: number;
+  color: [string] | [];
+  paused: boolean;
   created_at: bigint;
   created_by: Principal;
 }
