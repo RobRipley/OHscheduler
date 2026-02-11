@@ -235,6 +235,7 @@ fn get_event_instance(
             end_utc,
             title: series.title,
             notes,
+            link: series.link,
             host_principal,
             status: EventStatus::Active,
             color: series.color,

@@ -48,6 +48,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'series_id': IDL.Vec(IDL.Nat8),
     'title': IDL.Text,
     'notes': IDL.Text,
+    'link': IDL.Opt(IDL.Text),
     'frequency': Frequency,
     'weekday': Weekday,
     'weekday_ordinal': IDL.Opt(WeekdayOrdinal),
@@ -66,6 +67,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'end_utc': IDL.Nat64,
     'title': IDL.Text,
     'notes': IDL.Text,
+    'link': IDL.Opt(IDL.Text),
     'host_principal': IDL.Opt(IDL.Principal),
     'status': EventStatus,
     'created_at': IDL.Nat64,
@@ -80,6 +82,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
   const CreateEventInput = IDL.Record({
     'title': IDL.Text,
     'notes': IDL.Text,
+    'link': IDL.Opt(IDL.Text),
     'start_utc': IDL.Nat64,
     'end_utc': IDL.Nat64,
     'host_principal': IDL.Opt(IDL.Principal),
@@ -88,6 +91,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
   const CreateSeriesInput = IDL.Record({
     'title': IDL.Text,
     'notes': IDL.Text,
+    'link': IDL.Opt(IDL.Text),
     'frequency': Frequency,
     'weekday': Weekday,
     'weekday_ordinal': IDL.Opt(WeekdayOrdinal),
@@ -204,6 +208,7 @@ export interface EventInstance {
   end_utc: bigint;
   title: string;
   notes: string;
+  link: [string] | [];
   host_principal: [Principal] | [];
   status: { Active: null } | { Cancelled: null };
   created_at: bigint;
@@ -214,6 +219,7 @@ export interface EventSeries {
   series_id: Uint8Array | number[];
   title: string;
   notes: string;
+  link: [string] | [];
   frequency: { Weekly: null } | { Biweekly: null } | { Monthly: null };
   weekday: { Mon: null } | { Tue: null } | { Wed: null } | { Thu: null } | { Fri: null } | { Sat: null } | { Sun: null };
   weekday_ordinal: [{ First: null } | { Second: null } | { Third: null } | { Fourth: null } | { Last: null }] | [];
@@ -233,6 +239,7 @@ export interface GlobalSettings {
 export interface CreateSeriesInput {
   title: string;
   notes: string;
+  link: [string] | [];
   frequency: { Weekly: null } | { Biweekly: null } | { Monthly: null };
   weekday: { Mon: null } | { Tue: null } | { Wed: null } | { Thu: null } | { Fri: null } | { Sat: null } | { Sun: null };
   weekday_ordinal: [{ First: null } | { Second: null } | { Third: null } | { Fourth: null } | { Last: null }] | [];

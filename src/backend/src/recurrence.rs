@@ -290,6 +290,7 @@ pub fn materialize_events(window_start: u64, window_end: u64) -> Vec<EventInstan
                 end_utc,
                 title: series.title.clone(),
                 notes,
+                link: series.link.clone(),
                 host_principal,
                 status: EventStatus::Active,
                 color: series.color.clone(),

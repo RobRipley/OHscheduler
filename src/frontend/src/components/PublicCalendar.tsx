@@ -14,6 +14,7 @@ const publicIdlFactory = ({ IDL }: { IDL: any }) => {
     'end_utc': IDL.Nat64,
     'title': IDL.Text,
     'notes': IDL.Text,
+    'link': IDL.Opt(IDL.Text),
     'host_name': IDL.Opt(IDL.Text),
     'status': IDL.Variant({ 'Active': IDL.Null, 'Cancelled': IDL.Null }),
   });
@@ -28,6 +29,7 @@ interface PublicEvent {
   end_utc: bigint;
   title: string;
   notes: string;
+  link: [string] | [];
   host_name: [string] | [];
   status: { Active: null } | { Cancelled: null };
 }

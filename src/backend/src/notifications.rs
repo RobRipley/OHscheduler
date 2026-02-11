@@ -60,6 +60,7 @@ pub fn generate_ics(
     instance_id: &[u8; 16],
     title: &str,
     notes: &str,
+    link: Option<&str>,
     start_utc: u64,
     end_utc: u64,
     method: &str,
@@ -72,11 +73,21 @@ pub fn generate_ics(
     let end = format_ics_datetime(end_utc);
     let status = if cancelled { "CANCELLED" } else { "CONFIRMED" };
     
-    // Escape special characters in title and notes
     let title_escaped = title.replace("\\", "\\\\").replace(",", "\\,").replace(";", "\\;");
     let notes_escaped = notes.replace("\\", "\\\\").replace(",", "\\,").replace(";", "\\;").replace("\n", "\\n");
     
-    format!(
+    // Build description: include link if present
+    let description = if let Some(url) = link {
+        if notes.is_empty() {
+            format!("Join: {}", url)
+        } else {
+            format!("{}\\n\\nJoin: {}", notes_escaped, url)
+        }
+    } else {
+        notes_escaped
+    };
+    
+    let mut ics = format!(
 r#"BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//OHScheduler//ICP//EN
@@ -89,19 +100,17 @@ DTSTART:{}
 DTEND:{}
 SUMMARY:{}
 DESCRIPTION:{}
-STATUS:{}
-END:VEVENT
-END:VCALENDAR"#,
-        method,
-        uid,
-        sequence,
-        now,
-        start,
-        end,
-        title_escaped,
-        notes_escaped,
-        status
-    )
+STATUS:{}"#,
+        method, uid, sequence, now, start, end, title_escaped, description, status
+    );
+    
+    // Add URL property if link is present
+    if let Some(url) = link {
+        ics.push_str(&format!("\nURL:{}", url));
+    }
+    
+    ics.push_str("\nEND:VEVENT\nEND:VCALENDAR");
+    ics
 }
 
 
@@ -123,6 +132,7 @@ pub fn create_host_assigned_notification(
         instance_id,
         "Office Hours Session",
         "You have been assigned as host for this session.",
+        None,
         start_utc,
         end_utc,
         "REQUEST",
@@ -167,6 +177,7 @@ pub fn create_host_removed_notification(
         instance_id,
         "Office Hours Session - CANCELLED",
         "You have been removed as host for this session.",
+        None,
         start_utc,
         end_utc,
         "CANCEL",
@@ -211,6 +222,7 @@ pub fn create_instance_cancelled_notification(
         instance_id,
         title,
         "This session has been cancelled.",
+        None,
         start_utc,
         end_utc,
         "CANCEL",
@@ -254,6 +266,7 @@ pub fn create_instance_time_changed_notification(
         instance_id,
         title,
         "The time for this session has been updated.",
+        None,
         start_utc,
         end_utc,
         "REQUEST",

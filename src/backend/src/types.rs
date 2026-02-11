@@ -125,13 +125,14 @@ pub struct EventSeries {
     pub series_id: [u8; 16],
     pub title: String,
     pub notes: String,
+    pub link: Option<String>,
     pub frequency: Frequency,
     pub weekday: Weekday,
     pub weekday_ordinal: Option<WeekdayOrdinal>,
     pub start_date: u64,
     pub end_date: Option<u64>,
     pub default_duration_minutes: u32,
-    pub color: Option<String>,  // Optional color code (e.g., "blue", "orange", "#FF5733")
+    pub color: Option<String>,
     pub created_at: u64,
     pub created_by: Principal,
 }
@@ -144,9 +145,10 @@ pub struct EventInstance {
     pub end_utc: u64,
     pub title: String,
     pub notes: String,
+    pub link: Option<String>,
     pub host_principal: Option<Principal>,
     pub status: EventStatus,
-    pub color: Option<String>,  // Inherited from series
+    pub color: Option<String>,
     pub created_at: u64,
 }
 
@@ -213,6 +215,7 @@ pub struct NotificationJob {
 pub struct CreateEventInput {
     pub title: String,
     pub notes: String,
+    pub link: Option<String>,
     pub start_utc: u64,
     pub end_utc: u64,
     pub host_principal: Option<Principal>,
@@ -222,6 +225,7 @@ pub struct CreateEventInput {
 pub struct CreateSeriesInput {
     pub title: String,
     pub notes: String,
+    pub link: Option<String>,
     pub frequency: Frequency,
     pub weekday: Weekday,
     pub weekday_ordinal: Option<WeekdayOrdinal>,
@@ -254,6 +258,7 @@ pub struct PublicEventView {
     pub instance_id: Vec<u8>,
     pub title: String,
     pub notes: String,
+    pub link: Option<String>,
     pub start_utc: u64,
     pub end_utc: u64,
     pub host_name: Option<String>,

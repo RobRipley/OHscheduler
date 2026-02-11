@@ -192,6 +192,7 @@ fn list_events_public(window_start: u64, window_end: u64) -> Vec<PublicEventView
             instance_id: e.instance_id.to_vec(),
             title: e.title,
             notes: e.notes,
+            link: e.link,
             start_utc: e.start_utc,
             end_utc: e.end_utc,
             host_name,
@@ -236,9 +237,10 @@ fn create_one_off_event(input: CreateEventInput) -> ApiResult<EventInstance> {
         end_utc: input.end_utc,
         title: input.title,
         notes: input.notes,
+        link: input.link,
         host_principal: input.host_principal,
         status: EventStatus::Active,
-        color: None,  // One-off events don't have a color (could add to CreateEventInput later)
+        color: None,
         created_at: now,
     };
     
@@ -269,6 +271,7 @@ fn create_event_series(input: CreateSeriesInput) -> ApiResult<EventSeries> {
         series_id: recurrence::generate_uuid(),
         title: input.title,
         notes: input.notes,
+        link: input.link,
         frequency: input.frequency,
         weekday: input.weekday,
         weekday_ordinal: input.weekday_ordinal,
@@ -469,6 +472,7 @@ fn get_event_ics(instance_id: Vec<u8>) -> ApiResult<String> {
         &event.instance_id,
         &event.title,
         &event.notes,
+        event.link.as_deref(),
         event.start_utc,
         event.end_utc,
         "REQUEST",

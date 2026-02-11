@@ -623,6 +623,7 @@ function EventSeriesManagement() {
 function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { actor: any; triggerSessionExpired: () => void; onSuccess: () => void; onCancel: () => void }) {
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
+  const [link, setLink] = useState('');
   const [frequency, setFrequency] = useState<'Weekly' | 'Biweekly' | 'Monthly'>('Weekly');
   const [startDate, setStartDate] = useState('');
   const [startTime, setStartTime] = useState('14:00');
@@ -647,6 +648,7 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
       const input: CreateSeriesInput = {
         title: title.trim(),
         notes: notes.trim(),
+        link: link.trim() ? [link.trim()] : [],
         frequency: frequencyVariants[frequency],
         weekday: weekdayVariants[weekdayKey],
         weekday_ordinal: [],
@@ -675,6 +677,7 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
       {error && <div style={styles.formError}>{error}</div>}
       <div style={styles.formRow}><label style={styles.label}>Title</label><input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="Weekly Office Hours" style={styles.input} required /></div>
       <div style={styles.formRow}><label style={styles.label}>Notes (optional)</label><textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Open Q&A session" style={styles.textarea} /></div>
+      <div style={styles.formRow}><label style={styles.label}>Meeting Link (optional)</label><input type="url" value={link} onChange={e => setLink(e.target.value)} placeholder="https://meet.google.com/..." style={styles.input} /></div>
       <div style={styles.formRowGroup}>
         <div style={styles.formRowHalf}><label style={styles.label}>Frequency</label><select value={frequency} onChange={e => setFrequency(e.target.value as any)} style={styles.select}><option value="Weekly">Weekly</option><option value="Biweekly">Biweekly</option><option value="Monthly">Monthly</option></select></div>
         <div style={styles.formRowHalf}><label style={styles.label}>Duration</label><select value={duration} onChange={e => setDuration(e.target.value)} style={styles.select}><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option></select></div>
@@ -872,6 +875,10 @@ function Reports() {
   const coverageRate = totalEvents > 0 ? Math.round((assignedEvents / totalEvents) * 100) : 0;
 
   const hostCounts: Record<string, { name: string; count: number }> = {};
+  // Initialize all active users with 0 count
+  users.filter(u => 'Active' in u.status).forEach(u => {
+    hostCounts[u.principal.toText()] = { name: u.name, count: 0 };
+  });
   events.forEach(e => {
     if (e.host_principal.length > 0) {
       const principal = e.host_principal[0].toText();
@@ -883,6 +890,7 @@ function Reports() {
     }
   });
   const sortedHosts = Object.values(hostCounts).sort((a, b) => b.count - a.count);
+  const maxCount = sortedHosts.length > 0 ? Math.max(sortedHosts[0].count, 1) : 1;
 
   return (
     <div>
@@ -900,7 +908,7 @@ function Reports() {
           {sortedHosts.map(host => (
             <div key={host.name} style={styles.hostRow}>
               <span style={styles.hostName}>{host.name}</span>
-              <div style={styles.hostBar}><div style={{ ...styles.hostBarFill, width: `${(host.count / sortedHosts[0].count) * 100}%` }} /></div>
+              <div style={styles.hostBar}><div style={{ ...styles.hostBarFill, width: `${(host.count / maxCount) * 100}%` }} /></div>
               <span style={styles.hostCount}>{host.count}</span>
             </div>
           ))}

@@ -19,6 +19,7 @@ export default function Calendar() {
   const [users, setUsers] = useState<Map<string, User>>(new Map());
   const [viewMode, setViewMode] = useState<'week' | 'month'>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Helper: format nanosecond timestamp to time string in user's timezone
   const formatTimeInTz = (nanos: bigint) => {
@@ -225,10 +226,13 @@ export default function Calendar() {
     <div style={styles.container}>
       <div style={styles.headerRow}>
         <h2 style={styles.header}>Calendar</h2>
-        <div style={styles.timezoneNote}>{abbrev}</div>
-        <div style={styles.viewToggle}>
-          <button style={viewMode === 'week' ? styles.viewBtnActive : styles.viewBtn} onClick={() => setViewMode('week')}>Week</button>
-          <button style={viewMode === 'month' ? styles.viewBtnActive : styles.viewBtn} onClick={() => setViewMode('month')}>Month</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button style={styles.createBtn} onClick={() => setShowCreateModal(true)}>+ New Event</button>
+          <div style={styles.timezoneNote}>{abbrev}</div>
+          <div style={styles.viewToggle}>
+            <button style={viewMode === 'week' ? styles.viewBtnActive : styles.viewBtn} onClick={() => setViewMode('week')}>Week</button>
+            <button style={viewMode === 'month' ? styles.viewBtnActive : styles.viewBtn} onClick={() => setViewMode('month')}>Month</button>
+          </div>
         </div>
       </div>
 
@@ -350,6 +354,14 @@ export default function Calendar() {
           users={users}
           onClose={() => setSelectedEvent(null)}
           onRefresh={() => { setSelectedEvent(null); refreshEvents(); }}
+        />
+      )}
+      {showCreateModal && (
+        <CreateEventModal
+          actor={actor}
+          triggerSessionExpired={triggerSessionExpired}
+          onClose={() => setShowCreateModal(false)}
+          onCreated={() => { setShowCreateModal(false); refreshEvents(); }}
         />
       )}
     </div>
@@ -500,6 +512,12 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
             <span style={modalStyles.detailValue}>{event.notes}</span>
           </div>
         )}
+        {event.link && event.link.length > 0 && (
+          <div style={modalStyles.detail}>
+            <span style={modalStyles.detailLabel}>Link</span>
+            <a href={event.link[0]} target="_blank" rel="noopener noreferrer" style={modalStyles.linkValue}>{event.link[0]}</a>
+          </div>
+        )}
         {actionError && <div style={modalStyles.error}>{actionError}</div>}
         <div style={modalStyles.actions}>
           {!isCancelled && isNoHost && (
@@ -537,6 +555,108 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
   );
 }
 
+// ============== CREATE EVENT MODAL ==============
+function CreateEventModal({ actor, triggerSessionExpired, onClose, onCreated }: {
+  actor: any; triggerSessionExpired: () => void; onClose: () => void; onCreated: () => void;
+}) {
+  const { timezone } = useTimezone();
+  const [title, setTitle] = useState('');
+  const [notes, setNotes] = useState('');
+  const [link, setLink] = useState('');
+  const [date, setDate] = useState('');
+  const [startTime, setStartTime] = useState('14:00');
+  const [duration, setDuration] = useState('60');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!actor || !date || !title.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const startDateTime = new Date(`${date}T${startTime}:00`);
+      const endDateTime = new Date(startDateTime.getTime() + parseInt(duration) * 60 * 1000);
+      const result = await actor.create_one_off_event({
+        title: title.trim(),
+        notes: notes.trim(),
+        link: link.trim() ? [link.trim()] : [],
+        start_utc: dateToNanos(startDateTime),
+        end_utc: dateToNanos(endDateTime),
+        host_principal: [],
+      });
+      if ('Ok' in result) onCreated();
+      else setError(getErrorMessage(result.Err));
+    } catch (err: any) {
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setError('Your session has expired. Please sign in again.');
+      } else {
+        setError('Failed to create event');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={modalStyles.overlay} onClick={onClose}>
+      <div style={modalStyles.modal} onClick={e => e.stopPropagation()}>
+        <button style={modalStyles.closeBtn} onClick={onClose}>×</button>
+        <h3 style={modalStyles.title}>Create Event</h3>
+        {error && <div style={modalStyles.error}>{error}</div>}
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={createStyles.field}>
+            <label style={createStyles.label}>Title *</label>
+            <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="Office Hours" style={createStyles.input} required />
+          </div>
+          <div style={createStyles.field}>
+            <label style={createStyles.label}>Meeting Link</label>
+            <input type="url" value={link} onChange={e => setLink(e.target.value)} placeholder="https://meet.google.com/..." style={createStyles.input} />
+          </div>
+          <div style={createStyles.field}>
+            <label style={createStyles.label}>Notes</label>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional description" style={createStyles.textarea} />
+          </div>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <div style={{ ...createStyles.field, flex: 1 }}>
+              <label style={createStyles.label}>Date *</label>
+              <input type="date" value={date} onChange={e => setDate(e.target.value)} style={createStyles.input} required />
+            </div>
+            <div style={{ ...createStyles.field, flex: 1 }}>
+              <label style={createStyles.label}>Start Time *</label>
+              <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} style={createStyles.input} required />
+            </div>
+          </div>
+          <div style={createStyles.field}>
+            <label style={createStyles.label}>Duration</label>
+            <select value={duration} onChange={e => setDuration(e.target.value)} style={createStyles.input}>
+              <option value="30">30 minutes</option>
+              <option value="45">45 minutes</option>
+              <option value="60">1 hour</option>
+              <option value="90">1.5 hours</option>
+              <option value="120">2 hours</option>
+            </select>
+          </div>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '8px' }}>
+            <button type="button" onClick={onClose} style={createStyles.cancelBtn}>Cancel</button>
+            <button type="submit" disabled={loading} style={createStyles.submitBtn}>{loading ? 'Creating...' : 'Create Event'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+const createStyles: { [key: string]: React.CSSProperties } = {
+  field: { display: 'flex', flexDirection: 'column', gap: '6px' },
+  label: { fontSize: '12px', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' },
+  input: { padding: '10px 12px', background: theme.inputSurface, color: theme.textPrimary, border: `1px solid ${theme.borderInput}`, borderRadius: '8px', fontSize: '14px', outline: 'none' },
+  textarea: { padding: '10px 12px', background: theme.inputSurface, color: theme.textPrimary, border: `1px solid ${theme.borderInput}`, borderRadius: '8px', fontSize: '14px', outline: 'none', minHeight: '60px', resize: 'vertical' as any, fontFamily: 'inherit' },
+  cancelBtn: { padding: '10px 18px', background: 'transparent', color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '8px', cursor: 'pointer', fontSize: '14px' },
+  submitBtn: { padding: '10px 18px', background: theme.accent, color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500 },
+};
+
 function getErrorMessage(err: any): string {
   if ('Unauthorized' in err) return 'You are not authorized';
   if ('NotFound' in err) return 'Event not found';
@@ -550,6 +670,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   container: { padding: 0 },
   headerRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' },
   header: { margin: 0, color: theme.textPrimary, fontSize: '20px', fontWeight: 600 },
+  createBtn: { padding: '8px 16px', background: theme.accent, color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500 },
   timezoneNote: { fontSize: '12px', color: theme.textMuted, background: theme.surface, padding: '4px 10px', borderRadius: '4px', border: `1px solid ${theme.border}` },
   viewToggle: { display: 'flex', gap: '2px', background: theme.surface, padding: '2px', borderRadius: '8px', border: `1px solid ${theme.border}` },
   viewBtn: { padding: '8px 16px', border: 'none', background: 'transparent', color: theme.textMuted, borderRadius: '6px', cursor: 'pointer', fontSize: '14px', transition: 'all 150ms ease-out' },
