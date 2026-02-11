@@ -255,6 +255,7 @@ dfx canister call backend create_event_series '(record {
 | 2026-02-11 | 8 | ✅ | UX Phase 1 quick wins: Inter font, dark body bg, global.css (hover/focus/scrollbar/modal animations), theme expansion, nav fix, calendar nav centering, Yieldschool branding on all pages. Deployed to mainnet. |
 | 2026-02-11 | 8 | 📋 | Email integration specification written (Section 13 below) |
 | 2026-02-11 | 9 | ✅ | UX Phase 2 component library: Modal, ConfirmDialog, Button, Select, Toggle, Skeleton, Avatar. All modals/selects/confirms/toggles/loading states replaced across Calendar, CoverageQueue, AdminPanel. Deployed and tested on mainnet. Merged to main. |
+| 2026-02-11 | 10 | ✅ | UX Phase 3 page-level polish (15/15 items): Public calendar event modal + next session banner + month stats; Coverage Queue two-row cards + time grouping + Claim button + covered fade-out; Calendar hover + meeting link icons + taller cells; Login loading state; Admin segmented control; Series card hierarchy refactor. Deployed and tested on mainnet. Merged to main. |
 
 ---
 
