@@ -7,6 +7,7 @@ import Calendar from './Calendar';
 import CoverageQueue from './CoverageQueue';
 import AdminPanel from './AdminPanel';
 import NotificationBell from './NotificationBell';
+import { Avatar } from './ui';
 import { theme } from '../theme';
 
 export default function AuthenticatedLayout() {
@@ -166,9 +167,12 @@ export default function AuthenticatedLayout() {
               )}
             </div>
             
-            <span style={styles.userName}>
-              {user?.name || principal?.toText().slice(0, 8) + '...'}
-            </span>
+            <div style={styles.userGroup}>
+              <Avatar name={user?.name || 'U'} size={28} />
+              <span style={styles.userName}>
+                {user?.name || principal?.toText().slice(0, 8) + '...'}
+              </span>
+            </div>
             <button onClick={handleLogout} style={styles.logoutButton}>
               Sign out
             </button>
@@ -373,6 +377,11 @@ const styles: { [key: string]: React.CSSProperties } = {
   userName: {
     fontSize: '14px',
     color: theme.textSecondary,
+  },
+  userGroup: {
+    display: 'flex' as const,
+    alignItems: 'center' as const,
+    gap: '8px',
   },
   logoutButton: {
     padding: '6px 12px',

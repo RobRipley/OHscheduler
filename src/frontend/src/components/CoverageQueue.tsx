@@ -3,6 +3,8 @@ import { useBackend, EventInstance, User, nanosToDate, bytesToHex, isSessionExpi
 import { useAuth } from '../hooks/useAuth';
 import { useTimezone } from '../hooks/useTimezone';
 import { Principal } from '@dfinity/principal';
+import { Select, Button, SkeletonCard } from './ui';
+import type { SelectOption } from './ui';
 import { theme } from '../theme';
 
 export default function CoverageQueue() {
@@ -147,7 +149,15 @@ export default function CoverageQueue() {
   };
 
   if (actorLoading || loading) {
-    return <div style={styles.loading}>Loading coverage queue...</div>;
+    return (
+      <div style={styles.container}>
+        <h2 style={styles.title}>Coverage Queue</h2>
+        <p style={styles.subtitle}>Sessions that need a host assigned</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)}
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -217,37 +227,35 @@ export default function CoverageQueue() {
                   </span>
                   {!isCovered && (
                     <div style={styles.assignRow}>
-                      <select
-                        style={styles.hostSelect}
+                      <Select
+                        options={(() => {
+                          const opts: SelectOption[] = [];
+                          if (user) {
+                            opts.push({ value: user.principal.toText(), label: `${user.name} (Me)` });
+                          }
+                          users
+                            .filter(u => !user || u.principal.toText() !== user.principal.toText())
+                            .forEach(u => {
+                              opts.push({ value: u.principal.toText(), label: u.name });
+                            });
+                          return opts;
+                        })()}
                         value={selectedHost}
-                        onChange={(e) => setSelectedHosts(prev => ({ ...prev, [eventKey]: e.target.value }))}
+                        onChange={(val) => setSelectedHosts(prev => ({ ...prev, [eventKey]: val }))}
+                        placeholder="Select a host..."
+                        searchable={users.length > 5}
                         disabled={isAssigning}
-                      >
-                        <option value="">Select a host...</option>
-                        {user && (
-                          <option value={user.principal.toText()}>
-                            {user.name} (Me)
-                          </option>
-                        )}
-                        {users
-                          .filter(u => !user || u.principal.toText() !== user.principal.toText())
-                          .map(u => (
-                            <option key={u.principal.toText()} value={u.principal.toText()}>
-                              {u.name}
-                            </option>
-                          ))
-                        }
-                      </select>
-                      <button
-                        style={{
-                          ...styles.assignBtn,
-                          ...(isAssigning || !selectedHost ? styles.assignBtnDisabled : {}),
-                        }}
+                        style={{ flex: 1, minWidth: '160px' }}
+                      />
+                      <Button
+                        variant="primary"
+                        size="sm"
                         onClick={() => handleAssign(event)}
-                        disabled={isAssigning || !selectedHost}
+                        loading={isAssigning}
+                        disabled={!selectedHost}
                       >
-                        {isAssigning ? '...' : 'Assign'}
-                      </button>
+                        Assign
+                      </Button>
                     </div>
                   )}
                   {isCovered && assignedHostName && (

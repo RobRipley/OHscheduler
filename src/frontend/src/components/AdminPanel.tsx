@@ -3,6 +3,7 @@ import { Routes, Route, NavLink } from 'react-router-dom';
 import { useBackend, User, EventSeries, GlobalSettings, nanosToDate, bytesToHex, dateToNanos, CreateSeriesInput, isSessionExpiredError } from '../hooks/useBackend';
 import { useAuth } from '../hooks/useAuth';
 import { Principal } from '@dfinity/principal';
+import { useConfirm, Toggle, Modal, Button, SkeletonTable } from './ui';
 import { theme } from '../theme';
 
 export default function AdminPanel() {
@@ -48,6 +49,7 @@ const tabStyle = ({ isActive }: { isActive: boolean }) => ({
 // ============== USER MANAGEMENT ==============
 function UserManagement() {
   const { actor, loading: actorLoading, triggerSessionExpired } = useBackend();
+  const confirm = useConfirm();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -109,7 +111,13 @@ function UserManagement() {
 
   const handleDeleteUser = async (user: User) => {
     if (!actor) return;
-    if (!confirm(`Delete user "${user.name}"? This cannot be undone.`)) return;
+    const confirmed = await confirm({
+      title: 'Delete User',
+      message: `Delete user "${user.name}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     
     const key = user.principal.toText();
     setActionLoading(key + '-delete');
@@ -129,7 +137,7 @@ function UserManagement() {
     }
   };
 
-  if (actorLoading || loading) return <div style={styles.loading}>Loading users...</div>;
+  if (actorLoading || loading) return <SkeletonTable rows={5} cols={5} />;
 
   return (
     <div>
@@ -275,19 +283,23 @@ function AddUserForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { ac
   };
 
   return (
-    <form onSubmit={handleSubmit} style={styles.form}>
-      <h4 style={styles.formTitle}>Add New User</h4>
-      {error && <div style={styles.formError}>{error}</div>}
-      <div style={styles.formRow}>
-        <label style={styles.label}>Principal ID <span style={styles.optionalLabel}>(optional)</span></label>
-        <input type="text" value={principal} onChange={e => setPrincipal(e.target.value)} placeholder="Leave blank if user hasn't signed in yet" style={styles.input} />
-        <div style={styles.fieldHint}>If blank, user can be linked to their Internet Identity later</div>
-      </div>
-      <div style={styles.formRow}><label style={styles.label}>Name</label><input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="John Doe" style={styles.input} required /></div>
-      <div style={styles.formRow}><label style={styles.label}>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="john@example.com" style={styles.input} /></div>
-      <div style={styles.formRow}><label style={styles.label}>Role</label><select value={role} onChange={e => setRole(e.target.value as 'Admin' | 'User')} style={styles.select}><option value="User">User</option><option value="Admin">Admin</option></select></div>
-      <div style={styles.formActions}><button type="button" onClick={onCancel} style={styles.cancelBtn}>Cancel</button><button type="submit" disabled={loading} style={styles.submitBtn}>{loading ? 'Adding...' : 'Add User'}</button></div>
-    </form>
+    <Modal open={true} onClose={onCancel} title="Add New User">
+      <form onSubmit={handleSubmit}>
+        {error && <div style={styles.formError}>{error}</div>}
+        <div style={styles.formRow}>
+          <label style={styles.label}>Principal ID <span style={styles.optionalLabel}>(optional)</span></label>
+          <input type="text" value={principal} onChange={e => setPrincipal(e.target.value)} placeholder="Leave blank if user hasn't signed in yet" style={styles.input} />
+          <div style={styles.fieldHint}>If blank, user can be linked to their Internet Identity later</div>
+        </div>
+        <div style={styles.formRow}><label style={styles.label}>Name</label><input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="John Doe" style={styles.input} required /></div>
+        <div style={styles.formRow}><label style={styles.label}>Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="john@example.com" style={styles.input} /></div>
+        <div style={styles.formRow}><label style={styles.label}>Role</label><select value={role} onChange={e => setRole(e.target.value as 'Admin' | 'User')} style={styles.select}><option value="User">User</option><option value="Admin">Admin</option></select></div>
+        <div style={styles.formActions}>
+          <Button variant="secondary" onClick={onCancel} type="button">Cancel</Button>
+          <Button variant="primary" type="submit" loading={loading}>Add User</Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -350,14 +362,12 @@ function LinkPrincipalModal({ user, actor, triggerSessionExpired, onSuccess, onC
   };
 
   return (
-    <div style={styles.modalOverlay} onClick={onCancel}>
-      <div style={styles.modal} onClick={e => e.stopPropagation()}>
-        <h4 style={styles.modalTitle}>Link Principal to {user.name}</h4>
-        <p style={styles.modalDescription}>
-          Enter the Internet Identity principal for this user. You can find this when they sign in 
-          and visit the "Not Authorized" page, or ask them to share it from their II dashboard.
-        </p>
-        
+    <Modal
+      open={true}
+      onClose={onCancel}
+      title={`Link Principal to ${user.name}`}
+      description="Enter the Internet Identity principal for this user. You can find this when they sign in and visit the &quot;Not Authorized&quot; page, or ask them to share it from their II dashboard."
+    >
         {error && <div style={styles.formError}>{error}</div>}
         
         <form onSubmit={handleSubmit}>
@@ -375,14 +385,13 @@ function LinkPrincipalModal({ user, actor, triggerSessionExpired, onSuccess, onC
           </div>
           
           <div style={styles.formActions}>
-            <button type="button" onClick={onCancel} style={styles.cancelBtn}>Cancel</button>
-            <button type="submit" disabled={loading || !newPrincipal.trim()} style={styles.submitBtn}>
-              {loading ? 'Linking...' : 'Link Principal'}
-            </button>
+            <Button variant="secondary" onClick={onCancel} type="button">Cancel</Button>
+            <Button variant="primary" type="submit" loading={loading} disabled={!newPrincipal.trim()}>
+              Link Principal
+            </Button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -429,10 +438,7 @@ function EditUserModal({ user, actor, triggerSessionExpired, onSuccess, onCancel
   };
 
   return (
-    <div style={styles.modalOverlay} onClick={onCancel}>
-      <div style={styles.modal} onClick={e => e.stopPropagation()}>
-        <h4 style={styles.modalTitle}>Edit User</h4>
-        
+    <Modal open={true} onClose={onCancel} title="Edit User">
         {error && <div style={styles.formError}>{error}</div>}
         
         <form onSubmit={handleSubmit}>
@@ -469,20 +475,20 @@ function EditUserModal({ user, actor, triggerSessionExpired, onSuccess, onCancel
           </div>
           
           <div style={styles.formActions}>
-            <button type="button" onClick={onCancel} style={styles.cancelBtn}>Cancel</button>
-            <button type="submit" disabled={loading || !name.trim()} style={styles.submitBtn}>
-              {loading ? 'Saving...' : 'Save Changes'}
-            </button>
+            <Button variant="secondary" onClick={onCancel} type="button">Cancel</Button>
+            <Button variant="primary" type="submit" loading={loading} disabled={!name.trim()}>
+              Save Changes
+            </Button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
 // ============== EVENT SERIES MANAGEMENT ==============
 function EventSeriesManagement() {
   const { actor, loading: actorLoading, triggerSessionExpired } = useBackend();
+  const confirm = useConfirm();
   const [series, setSeries] = useState<EventSeries[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -516,7 +522,13 @@ function EventSeriesManagement() {
 
   const handleDelete = async (s: EventSeries) => {
     if (!actor) return;
-    if (!confirm(`Delete series "${s.title}"? This cannot be undone.`)) return;
+    const confirmed = await confirm({
+      title: 'Delete Series',
+      message: `Delete series "${s.title}"? This will remove all future instances. This cannot be undone.`,
+      confirmLabel: 'Delete',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     const key = bytesToHex(s.series_id as number[]);
     setDeletingId(key);
     try {
@@ -555,7 +567,16 @@ function EventSeriesManagement() {
     return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
   };
 
-  if (actorLoading || loading) return <div style={styles.loading}>Loading event series...</div>;
+  if (actorLoading || loading) return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div key={i} style={{ padding: '16px', background: theme.surfaceElevated, borderRadius: '10px', border: `1px solid ${theme.border}` }}>
+          <div className="skeleton" style={{ width: '40%', height: '16px', borderRadius: '6px', background: `linear-gradient(90deg, ${theme.inputSurface} 25%, ${theme.surfaceElevated} 50%, ${theme.inputSurface} 75%)`, backgroundSize: '200% 100%', animation: 'skeletonShimmer 1.5s ease-in-out infinite', marginBottom: '8px' }} />
+          <div className="skeleton" style={{ width: '60%', height: '12px', borderRadius: '6px', background: `linear-gradient(90deg, ${theme.inputSurface} 25%, ${theme.surfaceElevated} 50%, ${theme.inputSurface} 75%)`, backgroundSize: '200% 100%', animation: 'skeletonShimmer 1.5s ease-in-out infinite' }} />
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <div>
@@ -821,10 +842,11 @@ function SystemSettings() {
         <div style={styles.settingRow}>
           <div style={styles.settingInfo}><div style={styles.settingLabel}>Pause Assignments</div><div style={styles.settingDesc}>Temporarily prevent users from assigning hosts</div></div>
           <div style={styles.settingControl}>
-            <label style={styles.toggleLabel}>
-              <input type="checkbox" checked={settings.claims_paused} onChange={e => setSettings({ ...settings, claims_paused: e.target.checked })} style={styles.checkbox} />
-              <span style={settings.claims_paused ? styles.pausedLabel : styles.activeLabel}>{settings.claims_paused ? 'Paused' : 'Active'}</span>
-            </label>
+            <Toggle
+              checked={settings.claims_paused}
+              onChange={(checked) => setSettings({ ...settings, claims_paused: checked })}
+            />
+            <span style={settings.claims_paused ? styles.pausedLabel : styles.activeLabel}>{settings.claims_paused ? 'Paused' : 'Active'}</span>
           </div>
         </div>
         <button style={styles.submitBtn} onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Settings'}</button>

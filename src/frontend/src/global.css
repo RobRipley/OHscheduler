@@ -235,3 +235,44 @@ th[style*="text-transform: uppercase"],
 label[style*="text-transform: uppercase"] {
   letter-spacing: 0.05em;
 }
+
+
+/* =========================
+   Phase 2: Component Animations
+   ========================= */
+
+/* Skeleton shimmer */
+@keyframes skeletonShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Spinner */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Button variant hover states */
+.btn-primary:not(.btn-disabled):hover {
+  filter: brightness(1.1);
+  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3);
+}
+
+.btn-secondary:not(.btn-disabled):hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: #4B5563 !important;
+}
+
+.btn-ghost:not(.btn-disabled):hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+.btn-danger:not(.btn-disabled):hover {
+  background: rgba(248, 113, 113, 0.1) !important;
+  border-color: rgba(248, 113, 113, 0.4) !important;
+}
+
+.btn-disabled {
+  pointer-events: none;
+}
