@@ -305,7 +305,7 @@ export default function PublicCalendar() {
               </div>
             )}
 
-          <div style={styles.calendar}>
+          <div style={styles.calendar} className="public-calendar-grid">
             <div style={styles.weekHeader}>
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
                 <div key={day} style={styles.weekHeaderCell}>{day}</div>
@@ -360,6 +360,38 @@ export default function PublicCalendar() {
                 })}
               </div>
             ))}
+          </div>
+
+          {/* Mobile agenda view */}
+          <div className="public-calendar-agenda" style={styles.agendaList}>
+            {(() => {
+              const allEvents = events
+                .filter(e => 'Active' in e.status)
+                .sort((a, b) => (a.start_utc < b.start_utc ? -1 : 1));
+              if (allEvents.length === 0) return <div style={styles.agendaEmpty}>No events this month</div>;
+              let lastDate = '';
+              return allEvents.map((event, idx) => {
+                const dateStr = new Date(Number(event.start_utc / BigInt(1_000_000))).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: timezone });
+                const showDate = dateStr !== lastDate;
+                lastDate = dateStr;
+                const isNoHost = event.host_name.length === 0;
+                const color = isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title);
+                return (
+                  <div key={idx}>
+                    {showDate && <div style={styles.agendaDate}>{dateStr}</div>}
+                    <div style={{ ...styles.agendaItem, borderLeftColor: color.border }} onClick={() => setSelectedEvent(event)}>
+                      <div style={styles.agendaTime}>{formatTime(event.start_utc)}</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={styles.agendaTitle}>{event.title}</div>
+                        <div style={{ fontSize: '12px', color: isNoHost ? '#F87171' : theme.accent }}>
+                          {isNoHost ? 'No host' : event.host_name[0]}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              });
+            })()}
           </div>
           </>
         )}
@@ -481,6 +513,14 @@ const styles: { [key: string]: React.CSSProperties } = {
   nextSessionTime: { fontSize: '13px', color: theme.textSecondary },
   nextSessionHost: { fontSize: '13px', color: theme.accent },
   nextSessionArrow: { fontSize: '18px', color: theme.textMuted },
+
+  // Mobile agenda
+  agendaList: { background: theme.surface, borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '8px 0', overflow: 'hidden' },
+  agendaDate: { fontSize: '12px', fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase' as const, letterSpacing: '0.06em', padding: '12px 16px 4px' },
+  agendaItem: { display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px', borderLeft: '3px solid transparent', cursor: 'pointer' },
+  agendaTime: { fontSize: '13px', fontWeight: 600, color: theme.textSecondary, minWidth: '70px' },
+  agendaTitle: { fontSize: '14px', fontWeight: 600, color: theme.textPrimary },
+  agendaEmpty: { padding: '24px 16px', textAlign: 'center' as const, color: theme.textMuted, fontSize: '14px' },
 };
 
 const pubModalStyles: { [key: string]: React.CSSProperties } = {
