@@ -237,10 +237,14 @@ export default function Calendar() {
       </div>
 
       <div style={styles.navigation}>
-        <button style={styles.navBtn} onClick={goBack}>Previous</button>
-        <button style={styles.todayBtn} onClick={goToToday}>Today</button>
+        <div style={styles.navLeft}>
+          <button style={styles.navBtn} onClick={goBack}>‹ Prev</button>
+          <button style={styles.todayBtn} onClick={goToToday}>Today</button>
+        </div>
         <span style={styles.dateHeader}>{formatDateHeader()}</span>
-        <button style={styles.navBtn} onClick={goForward}>Next</button>
+        <div style={styles.navRight}>
+          <button style={styles.navBtn} onClick={goForward}>Next ›</button>
+        </div>
       </div>
 
       {error && <div style={styles.error}>{error}</div>}
@@ -675,10 +679,12 @@ const styles: { [key: string]: React.CSSProperties } = {
   viewToggle: { display: 'flex', gap: '2px', background: theme.surface, padding: '2px', borderRadius: '8px', border: `1px solid ${theme.border}` },
   viewBtn: { padding: '8px 16px', border: 'none', background: 'transparent', color: theme.textMuted, borderRadius: '6px', cursor: 'pointer', fontSize: '14px', transition: 'all 150ms ease-out' },
   viewBtnActive: { padding: '8px 16px', border: 'none', background: theme.accent, color: '#fff', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' },
-  navigation: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' },
-  navBtn: { padding: '8px 16px', border: `1px solid ${theme.border}`, background: theme.surface, color: theme.textSecondary, borderRadius: '6px', cursor: 'pointer', fontSize: '14px', transition: 'all 150ms ease-out' },
-  todayBtn: { padding: '8px 16px', border: `1px solid ${theme.accent}`, background: 'transparent', color: theme.accent, borderRadius: '6px', cursor: 'pointer', fontSize: '14px', fontWeight: 500 },
-  dateHeader: { fontSize: '18px', fontWeight: 600, flex: 1, textAlign: 'center', color: theme.textPrimary },
+  navigation: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' },
+  navLeft: { display: 'flex', alignItems: 'center', gap: '8px', flex: '1 1 0' },
+  navRight: { display: 'flex', alignItems: 'center', gap: '8px', flex: '1 1 0', justifyContent: 'flex-end' },
+  navBtn: { padding: '8px 14px', border: `1px solid ${theme.border}`, background: theme.surface, color: theme.textSecondary, borderRadius: theme.radiusSm, cursor: 'pointer', fontSize: '14px' },
+  todayBtn: { padding: '8px 14px', border: `1px solid ${theme.accent}`, background: 'transparent', color: theme.accent, borderRadius: theme.radiusSm, cursor: 'pointer', fontSize: '14px', fontWeight: 500 },
+  dateHeader: { fontSize: '18px', fontWeight: 600, textAlign: 'center', color: theme.textPrimary, flex: '0 0 auto' },
   loading: { background: theme.surface, padding: '40px', borderRadius: '12px', textAlign: 'center', color: theme.textMuted, border: `1px solid ${theme.border}` },
   error: { background: 'rgba(248, 113, 113, 0.1)', color: '#F87171', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', border: '1px solid rgba(248, 113, 113, 0.2)' },
   
@@ -725,7 +731,7 @@ const styles: { [key: string]: React.CSSProperties } = {
 
 const modalStyles: { [key: string]: React.CSSProperties } = {
   overlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0, 0, 0, 0.6)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
-  modal: { background: `rgba(18, 24, 38, 0.95)`, borderRadius: '16px', padding: '24px', maxWidth: '420px', width: '90%', position: 'relative', maxHeight: '90vh', overflowY: 'auto', border: `1px solid ${theme.border}` },
+  modal: { background: `rgba(18, 24, 38, 0.95)`, borderRadius: theme.radiusLg, padding: '24px', maxWidth: '420px', width: '90%', position: 'relative', maxHeight: '90vh', overflowY: 'auto', border: `1px solid ${theme.border}` },
   closeBtn: { position: 'absolute', top: '16px', right: '16px', background: 'transparent', border: 'none', fontSize: '20px', cursor: 'pointer', color: theme.textMuted, padding: '4px 8px', lineHeight: 1 },
   title: { margin: '0 0 20px 0', fontSize: '18px', fontWeight: 600, color: theme.textPrimary, paddingRight: '24px' },
   cancelledBadge: { display: 'inline-block', background: 'rgba(248, 113, 113, 0.15)', color: '#F87171', padding: '4px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 500, marginBottom: '16px' },

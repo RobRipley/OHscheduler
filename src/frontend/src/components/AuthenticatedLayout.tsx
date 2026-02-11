@@ -84,7 +84,10 @@ export default function AuthenticatedLayout() {
       
       <header style={styles.header}>
         <div style={styles.headerContent}>
-          <h1 style={styles.logo}>Office Hours</h1>
+          <div style={styles.logoGroup}>
+            <img src="/yieldschool_inc_logo.jpeg" alt="Yieldschool" style={styles.logoImg} />
+            <h1 style={styles.logo}>Office Hours</h1>
+          </div>
           <nav style={styles.nav}>
             <NavLink 
               to="/dashboard" 
@@ -238,8 +241,19 @@ const styles: { [key: string]: React.CSSProperties } = {
     height: '60px',
     gap: '24px',
   },
+  logoGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+  },
+  logoImg: {
+    width: '28px',
+    height: '28px',
+    borderRadius: '6px',
+    objectFit: 'cover' as const,
+  },
   logo: {
-    fontSize: '18px',
+    fontSize: '16px',
     fontWeight: 600,
     margin: 0,
     color: theme.textPrimary,
@@ -248,16 +262,20 @@ const styles: { [key: string]: React.CSSProperties } = {
     display: 'flex',
     gap: '4px',
     flex: 1,
+    alignSelf: 'stretch',
+    alignItems: 'stretch',
   },
   navLink: {
-    padding: '8px 16px',
+    padding: '0 16px',
     textDecoration: 'none',
     color: theme.textMuted,
-    borderRadius: '6px',
     fontSize: '14px',
     fontWeight: 500,
-    transition: 'color 150ms ease-out',
+    display: 'flex',
+    alignItems: 'center',
     borderBottom: '2px solid transparent',
+    marginBottom: '-1px',
+    transition: 'color 150ms ease-out',
   },
   navLinkActive: {
     color: theme.textPrimary,

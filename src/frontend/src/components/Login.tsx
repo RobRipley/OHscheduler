@@ -30,16 +30,19 @@ export default function Login() {
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h1 style={styles.title}>Office Hours Scheduler</h1>
-        <p style={styles.subtitle}>Sign in to manage office hours</p>
+        <img src="/yieldschool_inc_logo.jpeg" alt="Yieldschool" style={styles.logo} />
+        <h1 style={styles.title}>Office Hours</h1>
+        <p style={styles.subtitle}>Sign in to manage Yieldschool office hours</p>
         
         <button onClick={handleLogin} style={styles.loginButton}>
           Sign in with Internet Identity
         </button>
         
         <p style={styles.hint}>
-          Uses passkey authentication via Internet Identity
+          Secure, passwordless sign-in
         </p>
+        
+        <div style={styles.divider} />
         
         <a href="/" style={styles.publicLink}>
           View public calendar
@@ -60,12 +63,20 @@ const styles: { [key: string]: React.CSSProperties } = {
   },
   card: {
     background: theme.surface,
-    borderRadius: '16px',
+    borderRadius: theme.radiusLg,
     padding: '40px',
     textAlign: 'center',
     maxWidth: '400px',
     width: '100%',
     border: `1px solid ${theme.border}`,
+    boxShadow: '0 4px 24px rgba(0, 0, 0, 0.2)',
+  },
+  logo: {
+    width: '64px',
+    height: '64px',
+    borderRadius: theme.radiusMd,
+    objectFit: 'cover' as any,
+    marginBottom: '20px',
   },
   title: {
     fontSize: '24px',
@@ -95,6 +106,11 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontSize: '13px',
     color: theme.textMuted,
     marginBottom: '24px',
+  },
+  divider: {
+    height: '1px',
+    background: theme.border,
+    marginBottom: '20px',
   },
   publicLink: {
     color: theme.accent,

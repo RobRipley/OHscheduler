@@ -1,0 +1,237 @@
+/* ============================================
+   OHScheduler Global Stylesheet
+   Handles everything inline React styles can't:
+   hover, focus, placeholder, scrollbar, selection,
+   transitions, and form element resets.
+   ============================================ */
+
+/* --- Reset & Base --- */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: dark;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  background: #0B0F14;
+  color: #E5E7EB;
+  line-height: 1.5;
+}
+
+/* --- Form Element Reset --- */
+button, input, select, textarea {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  line-height: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+/* --- Focus Management --- */
+/* Remove default outlines, add custom focus-visible */
+*:focus {
+  outline: none;
+}
+
+*:focus-visible {
+  outline: 2px solid rgba(99, 102, 241, 0.6);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Inputs get a border glow instead of outline */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: #4B5563 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+/* --- Placeholder Styling --- */
+::placeholder {
+  color: #6B7280;
+  opacity: 1;
+}
+
+/* --- Selection --- */
+::selection {
+  background: rgba(99, 102, 241, 0.3);
+  color: #E5E7EB;
+}
+
+/* --- Scrollbar (Webkit) --- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4B5563;
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #374151 transparent;
+}
+
+/* --- Button Hover/Active States --- */
+/* Primary buttons (accent background) */
+button[style*="background: rgb(99, 102, 241)"],
+button[style*="background: #6366F1"],
+button[style*="background:#6366F1"] {
+  transition: background 150ms ease-out, transform 80ms ease-out, box-shadow 150ms ease-out;
+}
+button[style*="background: rgb(99, 102, 241)"]:hover,
+button[style*="background: #6366F1"]:hover,
+button[style*="background:#6366F1"]:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+button[style*="background: rgb(99, 102, 241)"]:active,
+button[style*="background: #6366F1"]:active,
+button[style*="background:#6366F1"]:active {
+  transform: scale(0.98);
+}
+
+/* Secondary/ghost buttons (transparent or bordered) */
+button[style*="background: transparent"] {
+  transition: background 150ms ease-out, color 150ms ease-out, border-color 150ms ease-out;
+}
+button[style*="background: transparent"]:hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* --- Interactive Card/Row Hovers --- */
+/* Calendar event cards */
+div[style*="cursor: pointer"] {
+  transition: background 150ms ease-out, transform 150ms ease-out, box-shadow 150ms ease-out;
+}
+div[style*="cursor: pointer"]:hover {
+  filter: brightness(1.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Table row hovers */
+tbody tr {
+  transition: background 150ms ease-out;
+}
+tbody tr:hover td {
+  background: #1E2433 !important;
+}
+
+/* --- Select/Dropdown Hover --- */
+select:hover {
+  border-color: #4B5563 !important;
+}
+
+/* --- Link Styles --- */
+a {
+  transition: color 150ms ease-out, opacity 150ms ease-out;
+}
+a:hover {
+  opacity: 0.85;
+}
+
+/* --- Modal Animations --- */
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Apply to modal overlays and cards */
+div[style*="position: fixed"][style*="background: rgba(0"] {
+  animation: overlayFadeIn 200ms ease-out;
+}
+
+div[style*="position: fixed"][style*="background: rgba(0"] > div {
+  animation: modalFadeIn 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* --- Toast Animation --- */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeSlideOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+    max-height: 200px;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(20px);
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+}
+
+/* Toast containers */
+div[style*="position: fixed"][style*="top: 20px"][style*="right: 20px"] {
+  animation: slideIn 250ms ease-out;
+}
+
+/* --- Disabled State --- */
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+  filter: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+/* --- Typography Refinements --- */
+h1, h2, h3 {
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+/* Uppercase labels */
+span[style*="text-transform: uppercase"],
+div[style*="text-transform: uppercase"],
+th[style*="text-transform: uppercase"],
+label[style*="text-transform: uppercase"] {
+  letter-spacing: 0.05em;
+}

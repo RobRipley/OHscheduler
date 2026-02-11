@@ -184,8 +184,11 @@ export default function PublicCalendar() {
       <main style={styles.main}>
         <div style={styles.headerRow}>
           <div style={styles.titleGroup}>
-            <span style={styles.title}>Office Hours</span>
-            <span style={styles.subtitle}>Public Calendar</span>
+            <img src="/yieldschool_inc_logo.jpeg" alt="Yieldschool" style={styles.logo} />
+            <div style={styles.titleText}>
+              <span style={styles.title}>Office Hours</span>
+              <span style={styles.subtitle}>Yieldschool</span>
+            </div>
           </div>
           <div style={styles.headerControls}>
             <div style={styles.tzWrapper} ref={tzRef}>
@@ -326,10 +329,12 @@ const styles: { [key: string]: React.CSSProperties } = {
   container: { minHeight: '100vh', display: 'flex', flexDirection: 'column', background: theme.bg },
   main: { flex: 1, maxWidth: '1100px', margin: '0 auto', padding: '24px 20px', width: '100%' },
   
-  headerRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
-  titleGroup: { display: 'flex', alignItems: 'baseline', gap: '8px' },
-  title: { fontSize: '20px', fontWeight: 600, color: theme.textPrimary },
-  subtitle: { fontSize: '15px', fontStyle: 'italic', color: theme.textMuted },
+  headerRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' },
+  titleGroup: { display: 'flex', alignItems: 'center', gap: '12px' },
+  logo: { width: '40px', height: '40px', borderRadius: theme.radiusSm, objectFit: 'cover' as const },
+  titleText: { display: 'flex', flexDirection: 'column' as const },
+  title: { fontSize: '20px', fontWeight: 600, color: theme.textPrimary, lineHeight: 1.2 },
+  subtitle: { fontSize: '13px', color: theme.textMuted, lineHeight: 1.3 },
   headerControls: { display: 'flex', alignItems: 'center', gap: '12px' },
   loginButton: { padding: '8px 16px', color: '#fff', background: theme.accent, border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500 },
   
