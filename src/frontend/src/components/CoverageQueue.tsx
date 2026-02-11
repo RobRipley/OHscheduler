@@ -3,7 +3,7 @@ import { useBackend, EventInstance, User, nanosToDate, bytesToHex, isSessionExpi
 import { useAuth } from '../hooks/useAuth';
 import { useTimezone } from '../hooks/useTimezone';
 import { Principal } from '@dfinity/principal';
-import { Select, Button } from './ui';
+import { Select, Button, SkeletonCard } from './ui';
 import type { SelectOption } from './ui';
 import { theme } from '../theme';
 
@@ -149,7 +149,15 @@ export default function CoverageQueue() {
   };
 
   if (actorLoading || loading) {
-    return <div style={styles.loading}>Loading coverage queue...</div>;
+    return (
+      <div style={styles.container}>
+        <h2 style={styles.title}>Coverage Queue</h2>
+        <p style={styles.subtitle}>Sessions that need a host assigned</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)}
+        </div>
+      </div>
+    );
   }
 
   return (

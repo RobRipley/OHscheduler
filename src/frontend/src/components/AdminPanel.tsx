@@ -3,7 +3,7 @@ import { Routes, Route, NavLink } from 'react-router-dom';
 import { useBackend, User, EventSeries, GlobalSettings, nanosToDate, bytesToHex, dateToNanos, CreateSeriesInput, isSessionExpiredError } from '../hooks/useBackend';
 import { useAuth } from '../hooks/useAuth';
 import { Principal } from '@dfinity/principal';
-import { useConfirm, Toggle, Modal, Button } from './ui';
+import { useConfirm, Toggle, Modal, Button, SkeletonTable } from './ui';
 import { theme } from '../theme';
 
 export default function AdminPanel() {
@@ -137,7 +137,7 @@ function UserManagement() {
     }
   };
 
-  if (actorLoading || loading) return <div style={styles.loading}>Loading users...</div>;
+  if (actorLoading || loading) return <SkeletonTable rows={5} cols={5} />;
 
   return (
     <div>
@@ -567,7 +567,16 @@ function EventSeriesManagement() {
     return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
   };
 
-  if (actorLoading || loading) return <div style={styles.loading}>Loading event series...</div>;
+  if (actorLoading || loading) return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div key={i} style={{ padding: '16px', background: theme.surfaceElevated, borderRadius: '10px', border: `1px solid ${theme.border}` }}>
+          <div className="skeleton" style={{ width: '40%', height: '16px', borderRadius: '6px', background: `linear-gradient(90deg, ${theme.inputSurface} 25%, ${theme.surfaceElevated} 50%, ${theme.inputSurface} 75%)`, backgroundSize: '200% 100%', animation: 'skeletonShimmer 1.5s ease-in-out infinite', marginBottom: '8px' }} />
+          <div className="skeleton" style={{ width: '60%', height: '12px', borderRadius: '6px', background: `linear-gradient(90deg, ${theme.inputSurface} 25%, ${theme.surfaceElevated} 50%, ${theme.inputSurface} 75%)`, backgroundSize: '200% 100%', animation: 'skeletonShimmer 1.5s ease-in-out infinite' }} />
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <div>

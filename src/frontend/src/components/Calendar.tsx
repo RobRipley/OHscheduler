@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useBackend, EventInstance, nanosToDate, dateToNanos, bytesToHex, User, isSessionExpiredError } from '../hooks/useBackend';
 import { useAuth } from '../hooks/useAuth';
 import { useTimezone } from '../hooks/useTimezone';
-import { Modal, Button, Select } from './ui';
+import { Modal, Button, Select, SkeletonCalendar } from './ui';
 import type { SelectOption } from './ui';
 import { theme } from '../theme';
 
@@ -216,7 +216,7 @@ export default function Calendar() {
     return (
       <div style={styles.container}>
         <h2 style={styles.header}>Calendar</h2>
-        <div style={styles.loading}>Loading events...</div>
+        <SkeletonCalendar />
       </div>
     );
   }
