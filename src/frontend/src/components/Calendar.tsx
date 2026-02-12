@@ -228,26 +228,20 @@ export default function Calendar() {
 
   return (
     <div style={styles.container}>
-      <div style={styles.headerRow} className="cal-header-row">
-        <h2 style={styles.header}>Calendar</h2>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} className="cal-controls">
+      <div style={styles.navigation} className="cal-header-row">
+        <div style={styles.navLeft} className="cal-controls">
+          <button style={styles.navBtn} onClick={goBack}>‹ Prev</button>
+          <button style={styles.todayBtn} onClick={goToToday}>Today</button>
+          <TimezoneButton />
+        </div>
+        <span style={styles.dateHeader}>{formatDateHeader()}</span>
+        <div style={styles.navRight} className="cal-controls">
           <button style={styles.createBtn} onClick={() => setShowCreateModal(true)}>+ New Event</button>
           <div style={styles.viewToggle}>
             <button style={viewMode === 'agenda' ? styles.viewBtnActive : styles.viewBtn} onClick={() => setViewMode('agenda')}>Agenda</button>
             <button style={viewMode === 'week' ? styles.viewBtnActive : styles.viewBtn} onClick={() => setViewMode('week')}>Week</button>
             <button style={viewMode === 'month' ? styles.viewBtnActive : styles.viewBtn} onClick={() => setViewMode('month')}>Month</button>
           </div>
-        </div>
-      </div>
-
-      <div style={styles.navigation}>
-        <div style={styles.navLeft}>
-          <button style={styles.navBtn} onClick={goBack}>‹ Prev</button>
-          <button style={styles.todayBtn} onClick={goToToday}>Today</button>
-          <TimezoneButton />
-        </div>
-        <span style={styles.dateHeader}>{formatDateHeader()}</span>
-        <div style={styles.navRight}>
           <button style={styles.navBtn} onClick={goForward}>Next ›</button>
         </div>
       </div>
@@ -748,8 +742,6 @@ function getErrorMessage(err: any): string {
 
 const styles: { [key: string]: React.CSSProperties } = {
   container: { padding: 0 },
-  headerRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' },
-  header: { margin: 0, color: theme.textPrimary, fontSize: '20px', fontWeight: 600 },
   createBtn: { padding: '8px 16px', background: theme.accent, color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500 },
   viewToggle: { display: 'flex', gap: '2px', background: theme.surface, padding: '2px', borderRadius: '8px', border: `1px solid ${theme.border}` },
   viewBtn: { padding: '8px 16px', border: 'none', background: 'transparent', color: theme.textMuted, borderRadius: '6px', cursor: 'pointer', fontSize: '14px', transition: 'all 150ms ease-out' },
