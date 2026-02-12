@@ -231,23 +231,6 @@ export default function PublicCalendar() {
               {orgTagline && <span style={styles.subtitle}>{orgTagline}</span>}
             </div>
           </div>
-          {!loading && nextSession && (
-            <div style={styles.nextSessionHeader} onClick={() => setSelectedEvent(nextSession)}>
-              <div style={styles.nextSessionLabel}>Next Session</div>
-              <div style={styles.nextSessionInfo}>
-                <strong>{nextSession.title}</strong>
-                <span style={styles.nextSessionTime}>
-                  {new Date(Number(nextSession.start_utc / BigInt(1_000_000))).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: timezone })}
-                  {' · '}
-                  {formatTime(nextSession.start_utc)} {abbrev}
-                </span>
-                {nextSession.host_name.length > 0 && (
-                  <span style={styles.nextSessionHost}>with {nextSession.host_name[0]}</span>
-                )}
-              </div>
-              <span style={styles.nextSessionArrow}>→</span>
-            </div>
-          )}
           <div style={styles.headerControls}>
             <button onClick={handleSignIn} style={styles.loginButton}>
               {isAuthenticated && isAuthorized ? 'Dashboard' : 'Sign In'}
@@ -339,6 +322,25 @@ export default function PublicCalendar() {
           <SkeletonCalendar />
         ) : (
           <>
+            {/* Next upcoming session banner */}
+            {nextSession && (
+              <div style={styles.nextSessionBanner} onClick={() => setSelectedEvent(nextSession)}>
+                <div style={styles.nextSessionLabel}>Next Session</div>
+                <div style={styles.nextSessionInfo}>
+                  <strong>{nextSession.title}</strong>
+                  <span style={styles.nextSessionTime}>
+                    {new Date(Number(nextSession.start_utc / BigInt(1_000_000))).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: timezone })}
+                    {' · '}
+                    {formatTime(nextSession.start_utc)} {abbrev}
+                  </span>
+                  {nextSession.host_name.length > 0 && (
+                    <span style={styles.nextSessionHost}>with {nextSession.host_name[0]}</span>
+                  )}
+                </div>
+                <span style={styles.nextSessionArrow}>→</span>
+              </div>
+            )}
+
           <div style={styles.calendar} className="public-calendar-grid">
             <div style={styles.weekHeader}>
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
@@ -543,13 +545,13 @@ const styles: { [key: string]: React.CSSProperties } = {
   monthSummary: { fontSize: '12px', color: theme.textMuted, marginTop: '2px' },
   needsHostSummary: { color: '#F87171' },
 
-  // Next session (header inline)
-  nextSessionHeader: { display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 14px', background: `linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(99, 102, 241, 0.06))`, border: `1px solid rgba(99, 102, 241, 0.25)`, borderRadius: '8px', cursor: 'pointer', transition: 'border-color 0.15s', maxWidth: '500px' },
-  nextSessionLabel: { fontSize: '9px', fontWeight: 700, color: theme.accent, textTransform: 'uppercase' as const, letterSpacing: '0.08em', whiteSpace: 'nowrap' as const, background: 'rgba(99, 102, 241, 0.15)', padding: '3px 6px', borderRadius: '4px' },
-  nextSessionInfo: { flex: 1, display: 'flex', flexWrap: 'wrap' as const, alignItems: 'center', gap: '4px 10px', fontSize: '13px', color: theme.textPrimary },
-  nextSessionTime: { fontSize: '12px', color: theme.textSecondary },
-  nextSessionHost: { fontSize: '12px', color: theme.accent },
-  nextSessionArrow: { fontSize: '16px', color: theme.textMuted },
+  // Next session banner
+  nextSessionBanner: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', padding: '12px 18px', background: `linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(99, 102, 241, 0.06))`, border: `1px solid rgba(99, 102, 241, 0.25)`, borderRadius: '10px', marginBottom: '16px', cursor: 'pointer', transition: 'border-color 0.15s' },
+  nextSessionLabel: { fontSize: '10px', fontWeight: 700, color: theme.accent, textTransform: 'uppercase' as const, letterSpacing: '0.08em', whiteSpace: 'nowrap' as const, background: 'rgba(99, 102, 241, 0.15)', padding: '4px 8px', borderRadius: '4px' },
+  nextSessionInfo: { display: 'flex', flexWrap: 'wrap' as const, alignItems: 'center', gap: '4px 10px', fontSize: '14px', color: theme.textPrimary },
+  nextSessionTime: { fontSize: '13px', color: theme.textSecondary },
+  nextSessionHost: { fontSize: '13px', color: theme.accent },
+  nextSessionArrow: { fontSize: '18px', color: theme.textMuted },
 
   // Mobile agenda
   agendaList: { background: theme.surface, borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '8px 0', overflow: 'hidden' },
