@@ -985,6 +985,28 @@ Given that:
 
 **The fix is almost certainly: add `paused: []` to the updateInput object in EditSeriesForm.**
 
+### Resolution (2026-02-12)
+
+**Status: RESOLVED** — Commit `76a4550`
+
+**Root cause confirmed:** The `updateInput` JS object in `EditSeriesForm.handleSubmit` was missing the `paused` key. Agent-js requires **every** field declared in an `IDL.Record` to be present in the JS object when encoding a Candid call, including `Opt` fields — they must be `[]` for `None` or `[value]` for `Some`. The error "Record is missing key 'paused'" was thrown during **request encoding**, not response decoding.
+
+**Fix:** One line added to `src/frontend/src/components/AdminPanel.tsx`:
+```typescript
+const updateInput = {
+  title: [title.trim()],
+  notes: [notes.trim()],
+  end_date: endDate ? [[dateToNanos(new Date(endDate + 'T23:59:59'))]] : [[]],
+  default_duration_minutes: [parseInt(duration)],
+  color: color ? [[color]] : [[]],
+  paused: [],  // ← THIS WAS MISSING
+};
+```
+
+**Why other endpoints worked:** `list_event_series` takes no arguments (nothing to encode). `toggle_series_pause` takes only `Vec<u8>` (simple input, no Record). `create_event_series` uses `CreateSeriesInput` which had all fields present. Only `update_event_series` with `UpdateSeriesInput` was affected.
+
+**Key lesson for ICP/agent-js development:** When building JS objects for Candid `IDL.Record` types, every field must be explicitly present. Optional fields use `[]` for None, `[value]` for Some. Omitting a field entirely (even an optional one) causes an encoding error, not a type error. The error message "Record is missing key X" refers to the JS object, not the wire response. Future field additions to any `UpdateXInput` type must always include corresponding `fieldName: []` in the frontend payload.
+
 ### Additional Note: Identity Polling Loop
 
 The console logs also reveal the 1-second identity polling in `useBackend` is creating actors in a tight loop (15+ actor recreations at the same timestamp). The `currentPrincipal` state comparison against `cachedIdentityPrincipal` has a race condition where the state update hasn't propagated before the next interval fires. This is a separate issue but should be addressed — either debounce the polling or use a ref instead of state for the comparison.
