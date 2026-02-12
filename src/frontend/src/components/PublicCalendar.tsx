@@ -154,7 +154,7 @@ export default function PublicCalendar() {
     fetchEvents();
   }, [currentMonth]);
 
-  const handleSignIn = async () => {
+  const handleSignIn = () => {
     if (isAuthenticated && isAuthorized) {
       navigate('/dashboard');
       return;
@@ -163,7 +163,7 @@ export default function PublicCalendar() {
       navigate('/not-authorized');
       return;
     }
-    await login();
+    navigate('/login');
   };
 
   const eventsByDate = useMemo(() => {

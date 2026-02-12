@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { AuthClient } from '@dfinity/auth-client';
 import { Actor, HttpAgent, Identity } from '@dfinity/agent';
 import { Principal } from '@dfinity/principal';
@@ -181,40 +181,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log('Session cleared. Please sign in again.');
   }, []);
 
-  // Check if user is authorized in backend
-  const checkAuthorization = useCallback(async (identity: Identity, client: AuthClient) => {
+  // Check if user is authorized in backend (standalone function, no deps)
+  const checkAuthorizationAndSetState = useCallback(async (identity: Identity, client: AuthClient) => {
     try {
       const network = import.meta.env.VITE_DFX_NETWORK || 'local';
       const host = network === 'ic' ? 'https://icp-api.io' : 'http://localhost:4943';
       
-      const agent = new HttpAgent({ 
-        identity,
-        host,
-      });
+      const agent = new HttpAgent({ identity, host });
       
-      // For local development, fetch root key
       if (network !== 'ic') {
         await agent.fetchRootKey();
       }
 
-      // Create actor
       const actor = Actor.createActor(idlFactory, {
         agent,
         canisterId: BACKEND_CANISTER_ID,
       });
 
-      // Call get_current_user
       const result = await actor.get_current_user() as { Ok?: any; Err?: any };
       
       if (result.Ok) {
         const userData = result.Ok;
+        const principalId = identity.getPrincipal();
         setUser(userData);
+        setIsAuthenticated(true);
+        setPrincipal(principalId);
         setIsAuthorized(true);
         setIsAdmin('Admin' in userData.role);
         setIsSessionExpired(false);
         console.log('User authorized:', userData);
       } else {
+        const principalId = identity.getPrincipal();
         console.log('User not authorized:', result.Err);
+        setIsAuthenticated(true);
+        setPrincipal(principalId);
         setIsAuthorized(false);
         setIsAdmin(false);
         setIsSessionExpired(false);
@@ -223,7 +223,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Authorization check failed:', error);
       
-      // Check if this is a session expiry error
       if (isSessionExpiredError(error)) {
         console.warn('Session expired - delegation/signature invalid');
         setIsSessionExpired(true);
@@ -231,53 +230,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsAuthorized(false);
         setIsAdmin(false);
         
-        // Auto-clear the expired session
         await clearAuthStorage();
         
-        // Logout from auth client
         if (client) {
-          try {
-            await client.logout();
-          } catch (e) {
+          try { await client.logout(); } catch (e) {
             console.warn('Logout during session clear failed:', e);
           }
         }
         
-        // Recreate auth client
         const newClient = await AuthClient.create();
         setAuthClient(newClient);
       } else {
-        // Some other error - just mark as not authorized
+        const principalId = identity.getPrincipal();
+        setIsAuthenticated(true);
+        setPrincipal(principalId);
         setIsAuthorized(false);
         setIsAdmin(false);
       }
+    } finally {
+      setIsLoading(false);
     }
-  }, []);
+  }, []); // No dependencies - this function is stable
 
-  const handleAuthenticated = useCallback(async (client: AuthClient) => {
-    const identity = client.getIdentity();
-    const principalId = identity.getPrincipal();
-    
-    setIsAuthenticated(true);
-    setPrincipal(principalId);
-    
-    await checkAuthorization(identity, client);
-  }, [checkAuthorization]);
-
-  // Initialize auth client
+  // Initialize auth client — runs once on mount
   useEffect(() => {
+    let cancelled = false;
     AuthClient.create().then(async (client) => {
+      if (cancelled) return;
       setAuthClient(client);
       
       if (await client.isAuthenticated()) {
-        await handleAuthenticated(client);
+        const identity = client.getIdentity();
+        await checkAuthorizationAndSetState(identity, client);
+      } else {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     });
-  }, [handleAuthenticated]);
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loginInProgressRef = useRef(false);
 
   const login = useCallback(async () => {
-    if (!authClient) return;
+    // Prevent concurrent login attempts (React strict mode + double-render can cause multiple calls)
+    if (loginInProgressRef.current) {
+      console.log('[Auth] Login already in progress, skipping');
+      return;
+    }
+    if (!authClient) {
+      console.warn('[Auth] No authClient available, cannot login');
+      return;
+    }
+    
+    loginInProgressRef.current = true;
     
     // Clear any expired session state before attempting login
     setIsSessionExpired(false);
@@ -285,15 +290,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Max delegation expiry: 30 days (in nanoseconds)
     const thirtyDaysInNanoseconds = BigInt(30 * 24 * 60 * 60 * 1000 * 1000 * 1000);
     
-    await authClient.login({
-      identityProvider: getIdentityProviderUrl(),
-      maxTimeToLive: thirtyDaysInNanoseconds,
-      onSuccess: () => handleAuthenticated(authClient),
-      onError: (error) => {
-        console.error('Login failed:', error);
-      },
-    });
-  }, [authClient, handleAuthenticated]);
+    console.log('[Auth] Calling authClient.login with provider:', getIdentityProviderUrl());
+    try {
+      await authClient.login({
+        identityProvider: getIdentityProviderUrl(),
+        maxTimeToLive: thirtyDaysInNanoseconds,
+        onSuccess: async () => {
+          console.log('[Auth] Login success callback');
+          loginInProgressRef.current = false;
+          const identity = authClient.getIdentity();
+          await checkAuthorizationAndSetState(identity, authClient);
+        },
+        onError: (error) => {
+          console.error('[Auth] Login error:', error);
+          loginInProgressRef.current = false;
+        },
+      });
+    } catch (e) {
+      console.error('[Auth] Login exception:', e);
+      loginInProgressRef.current = false;
+    }
+    console.log('[Auth] authClient.login returned');
+  }, [authClient, checkAuthorizationAndSetState]);
 
   const logout = useCallback(async () => {
     if (!authClient) return;
