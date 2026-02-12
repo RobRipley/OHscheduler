@@ -126,7 +126,9 @@ export default function NotAuthorized() {
         if ('InvalidInput' in err) setRedeemError(err.InvalidInput);
         else if ('Conflict' in err) setRedeemError(err.Conflict);
         else if ('InternalError' in err) setRedeemError(err.InternalError);
-        else setRedeemError('Failed to redeem invite code.');
+        else if ('NotFound' in err) setRedeemError('Invite code not found.');
+        else if ('Unauthorized' in err) setRedeemError('Authentication required. Try signing out and back in.');
+        else setRedeemError('Failed to redeem invite code. Error: ' + JSON.stringify(err));
       }
     } catch (err: any) {
       console.error('Redeem error:', err);

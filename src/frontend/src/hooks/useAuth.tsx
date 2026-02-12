@@ -27,6 +27,8 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'status': UserStatus,
     'out_of_office': IDL.Vec(OOOBlock),
     'notification_settings': NotificationSettings,
+    'last_active': IDL.Nat64,
+    'sessions_hosted_count': IDL.Nat32,
     'created_at': IDL.Nat64,
     'updated_at': IDL.Nat64,
   });

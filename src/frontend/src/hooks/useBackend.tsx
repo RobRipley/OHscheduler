@@ -172,6 +172,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'disable_user': IDL.Func([IDL.Principal], [Result_Unit], []),
     'enable_user': IDL.Func([IDL.Principal], [Result_Unit], []),
     'update_user': IDL.Func([IDL.Principal, IDL.Text, IDL.Text, Role], [Result_User], []),
+    'delete_user': IDL.Func([IDL.Principal], [Result_Unit], []),
 
 
     // Events - Authenticated
