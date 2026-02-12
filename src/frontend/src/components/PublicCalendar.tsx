@@ -325,12 +325,14 @@ export default function PublicCalendar() {
               </div>
             )}
           </div>
-          <button 
-            onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
-            style={styles.navButton}
-          >
-            ›
-          </button>
+          <div style={styles.navRight}>
+            <button 
+              onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
+              style={styles.navButton}
+            >
+              ›
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -506,9 +508,10 @@ const styles: { [key: string]: React.CSSProperties } = {
   tzNoResults: { padding: '12px', textAlign: 'center', fontSize: '13px', color: theme.textMuted },
   
   monthNav: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' },
-  navLeft: { display: 'flex', alignItems: 'center', gap: '8px' },
+  navLeft: { display: 'flex', alignItems: 'center', gap: '8px', flex: '1 1 0' },
   navButton: { padding: '6px 12px', background: theme.surface, color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '6px', cursor: 'pointer', fontSize: '14px' },
-  navCenter: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center' },
+  navCenter: { flex: '0 0 auto', display: 'flex', flexDirection: 'column' as const, alignItems: 'center' },
+  navRight: { flex: '1 1 0', display: 'flex', justifyContent: 'flex-end' },
   monthTitle: { fontSize: '16px', fontWeight: 500, margin: 0, color: theme.textPrimary },
   loading: { textAlign: 'center', padding: '60px 20px', color: theme.textMuted, background: theme.surface, borderRadius: '12px', border: `1px solid ${theme.border}` },
   empty: { textAlign: 'center', padding: '60px 20px', background: theme.surface, borderRadius: '12px', marginTop: '20px', border: `1px solid ${theme.border}` },
