@@ -122,6 +122,15 @@ pub struct User {
     pub updated_at: u64,
 }
 
+/// Lightweight user info for directory listing (no sensitive fields)
+#[derive(CandidType, Deserialize, Clone, Debug)]
+pub struct UserDirectoryEntry {
+    pub principal: Principal,
+    pub name: String,
+    pub role: Role,
+    pub status: UserStatus,
+}
+
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub struct EventSeries {
     pub series_id: [u8; 16],

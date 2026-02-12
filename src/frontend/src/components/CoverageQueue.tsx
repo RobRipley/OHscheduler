@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useBackend, EventInstance, User, nanosToDate, bytesToHex, isSessionExpiredError } from '../hooks/useBackend';
+import { useBackend, EventInstance, UserDirectoryEntry, nanosToDate, bytesToHex, isSessionExpiredError } from '../hooks/useBackend';
 import { useAuth } from '../hooks/useAuth';
 import { useTimezone } from '../hooks/useTimezone';
 import { Principal } from '@dfinity/principal';
@@ -14,7 +14,7 @@ export default function CoverageQueue() {
   const { timezone, abbrev } = useTimezone();
   
   const [events, setEvents] = useState<EventInstance[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<UserDirectoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [assigningId, setAssigningId] = useState<string | null>(null);
@@ -58,10 +58,16 @@ export default function CoverageQueue() {
   const fetchUsers = useCallback(async () => {
     if (!actor) return;
     try {
-      const result = await actor.list_users();
+      const result = await actor.list_user_directory();
       if ('Ok' in result) {
-        const activeUsers = result.Ok.filter((u: User) => 'Active' in u.status);
-        setUsers(activeUsers);
+        const activeUsers = result.Ok.filter((u: UserDirectoryEntry) => 'Active' in u.status);
+        // Non-admins can only assign themselves in coverage queue
+        const isAdmin = user && 'Admin' in user.role;
+        if (isAdmin) {
+          setUsers(activeUsers);
+        } else if (user) {
+          setUsers(activeUsers.filter((u: UserDirectoryEntry) => u.principal.toText() === user.principal.toText()));
+        }
       }
     } catch (err) {
       if (isSessionExpiredError(err)) {

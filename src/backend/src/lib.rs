@@ -87,6 +87,19 @@ fn list_users() -> ApiResult<Vec<User>> {
     Ok(storage::list_all_users())
 }
 
+/// List user directory (any authorized user) — returns name + principal + role + status only
+#[query]
+fn list_user_directory() -> ApiResult<Vec<UserDirectoryEntry>> {
+    auth::require_authorized()?;
+    let users = storage::list_all_users();
+    Ok(users.into_iter().map(|u| UserDirectoryEntry {
+        principal: u.principal,
+        name: u.name,
+        role: u.role,
+        status: u.status,
+    }).collect())
+}
+
 /// Authorize a new user (admin only)
 #[update]
 fn authorize_user(principal: Principal, name: String, email: String, role: Role) -> ApiResult<User> {

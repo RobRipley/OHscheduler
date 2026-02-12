@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useBackend, EventInstance, nanosToDate, dateToNanos, bytesToHex, User, isSessionExpiredError } from '../hooks/useBackend';
+import { useBackend, EventInstance, nanosToDate, dateToNanos, bytesToHex, User, UserDirectoryEntry, isSessionExpiredError } from '../hooks/useBackend';
 import { useAuth } from '../hooks/useAuth';
 import { useTimezone } from '../hooks/useTimezone';
 import { Modal, Button, Select, SkeletonCalendar } from './ui';
@@ -20,7 +20,7 @@ export default function Calendar() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
-  const [users, setUsers] = useState<Map<string, User>>(new Map());
+  const [users, setUsers] = useState<Map<string, UserDirectoryEntry>>(new Map());
   const [viewMode, setViewMode] = useState<'week' | 'month' | 'agenda'>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -100,10 +100,10 @@ export default function Calendar() {
     if (!actor || actorLoading) return;
     async function fetchUsers() {
       try {
-        const result = await actor.list_users();
+        const result = await actor.list_user_directory();
         if ('Ok' in result) {
-          const userMap = new Map<string, User>();
-          result.Ok.forEach((u: User) => userMap.set(u.principal.toText(), u));
+          const userMap = new Map<string, UserDirectoryEntry>();
+          result.Ok.forEach((u: UserDirectoryEntry) => userMap.set(u.principal.toText(), u));
           setUsers(userMap);
         }
       } catch (err) {
@@ -451,7 +451,7 @@ interface EventDetailModalProps {
   currentUser: any;
   actor: any;
   triggerSessionExpired: () => void;
-  users: Map<string, User>;
+  users: Map<string, UserDirectoryEntry>;
   onClose: () => void;
   onRefresh: () => void;
 }
@@ -571,7 +571,6 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
     .map(u => ({
       value: u.principal.toText(),
       label: u.principal.toText() === currentPrincipal ? `${u.name} (me)` : u.name,
-      sublabel: u.email || undefined,
     }));
 
   return (

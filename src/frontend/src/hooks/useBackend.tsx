@@ -137,6 +137,14 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
 
   const Result_User = IDL.Variant({ 'Ok': User, 'Err': ApiError });
   const Result_Vec_User = IDL.Variant({ 'Ok': IDL.Vec(User), 'Err': ApiError });
+
+  const UserDirectoryEntry = IDL.Record({
+    'principal': IDL.Principal,
+    'name': IDL.Text,
+    'role': Role,
+    'status': UserStatus,
+  });
+  const Result_Vec_UserDirectoryEntry = IDL.Variant({ 'Ok': IDL.Vec(UserDirectoryEntry), 'Err': ApiError });
   const Result_Unit = IDL.Variant({ 'Ok': IDL.Null, 'Err': ApiError });
   const Result_Vec_EventInstance = IDL.Variant({ 'Ok': IDL.Vec(EventInstance), 'Err': ApiError });
   const Result_EventInstance = IDL.Variant({ 'Ok': EventInstance, 'Err': ApiError });
@@ -168,6 +176,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
 
     // Admin - Users  
     'list_users': IDL.Func([], [Result_Vec_User], ['query']),
+    'list_user_directory': IDL.Func([], [Result_Vec_UserDirectoryEntry], ['query']),
     'authorize_user': IDL.Func([IDL.Principal, IDL.Text, IDL.Text, Role], [Result_User], []),
     'disable_user': IDL.Func([IDL.Principal], [Result_Unit], []),
     'enable_user': IDL.Func([IDL.Principal], [Result_Unit], []),
@@ -239,6 +248,13 @@ export interface User {
 export interface OOOBlock {
   start_utc: bigint;
   end_utc: bigint;
+}
+
+export interface UserDirectoryEntry {
+  principal: Principal;
+  name: string;
+  role: { Admin: null } | { User: null };
+  status: { Active: null } | { Disabled: null };
 }
 
 export interface NotificationSettings {

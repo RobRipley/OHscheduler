@@ -155,6 +155,14 @@ type InviteCode = record {
 
 type Result_User = variant { Ok: User; Err: ApiError };
 type Result_Vec_User = variant { Ok: vec User; Err: ApiError };
+
+type UserDirectoryEntry = record {
+    "principal": principal;
+    name: text;
+    role: Role;
+    status: UserStatus;
+};
+type Result_Vec_UserDirectoryEntry = variant { Ok: vec UserDirectoryEntry; Err: ApiError };
 type Result_Unit = variant { Ok; Err: ApiError };
 type Result_Vec_EventInstance = variant { Ok: vec EventInstance; Err: ApiError };
 type Result_EventInstance = variant { Ok: EventInstance; Err: ApiError };
@@ -175,6 +183,7 @@ service : {
 
     // Admin - Users
     list_users : () -> (Result_Vec_User) query;
+    list_user_directory : () -> (Result_Vec_UserDirectoryEntry) query;
     authorize_user : (principal, text, text, Role) -> (Result_User);
     disable_user : (principal) -> (Result_Unit);
     enable_user : (principal) -> (Result_Unit);
