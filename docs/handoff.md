@@ -861,3 +861,132 @@ The `useAuth` IDL definition for `get_current_user` was missing two fields from 
 The backend returned these fields but the frontend IDL didn't declare them. Candid can sometimes tolerate extra fields, but mismatches between the IDL and the actual response can cause silent deserialization failures depending on field ordering and types. Always ensure frontend IDL definitions exactly match the backend Candid interface.
 
 ---
+
+
+## Section 15: OPEN BUG — "Record is missing key 'paused'" on Series Edit
+
+**Status:** UNRESOLVED  
+**Date:** 2026-02-12  
+**Severity:** Blocks editing of event series in Admin Panel  
+**Affects:** Admin Panel → Event Series → Edit (pencil icon) on any series
+
+### Symptom
+
+When clicking the edit icon on any event series in the Admin Panel, the Edit Series form renders but immediately displays the error: `Record is missing key "paused".` The Save Changes button submits but the response decode fails with the same error.
+
+### What Works vs. What Doesn't
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| `list_event_series` (series list) | ✅ Works | All series render with correct paused state, colors, titles |
+| `toggle_series_pause` | ✅ Works | Pause/resume successfully toggles and re-renders |
+| `create_event_series` | ✅ Works | New series created with paused=false |
+| `update_event_series` (edit save) | ❌ Fails | Response decode: "Record is missing key 'paused'" |
+| Backend via dfx CLI | ✅ Works | `dfx canister call backend update_event_series` returns paused field correctly |
+
+### Evidence Gathered
+
+**1. Backend returns paused correctly**
+```
+dfx canister call backend update_event_series '(...)' --network ic
+→ Ok = record { ...; paused = true; ...; }
+```
+All 8 series have `paused` and `link` fields in dfx query output.
+
+**2. Frontend IDL is correct**
+The built JS bundle (`index-BY4W5O_5.js`) contains the EventSeries IDL with `paused: e.Bool`. Verified by:
+- `grep -c "paused" dist/assets/index-BY4W5O_5.js` → 1 (present in IDL)
+- In-browser `fetch('/assets/index-BY4W5O_5.js')` confirmed 2 matches for `default_duration_minutes...paused` pattern
+- The browser is serving the correct bundle (same hash as built file)
+
+**3. Same IDL type used for all endpoints**
+```typescript
+const Result_EventSeries = IDL.Variant({ 'Ok': EventSeries, 'Err': ApiError });
+// Used by: create_event_series, update_event_series, toggle_series_pause
+const Result_Vec_EventSeries = IDL.Variant({ 'Ok': IDL.Vec(EventSeries), 'Err': ApiError });
+// Used by: list_event_series
+```
+Both reference the same `EventSeries` IDL.Record which includes `'paused': IDL.Bool`.
+
+**4. toggle_series_pause returns Result_EventSeries and works**
+This is the most confusing evidence. `toggle_series_pause` and `update_event_series` both return `Result_EventSeries`, yet toggle works and update doesn't. The only difference is the input type.
+
+**5. No console errors logged**
+The error is caught by the `catch` block in the edit form and displayed via `setError(err.message)`. No stack trace in console because it's caught and displayed as UI text.
+
+**6. .did file was out of sync (partially fixed)**
+The `.did` file was missing `paused` in `EventSeries` and `UpdateSeriesInput`. Both were added. However, the `.did` file is used by the dfx CLI for decoding, not directly by the frontend agent-js. The frontend uses its own IDL factory.
+
+### Hypotheses Explored
+
+**Hypothesis 1: Browser caching old JS bundle**
+- Evidence for: Error persists across refreshes
+- Evidence against: Incognito window shows same error. `fetch()` of JS bundle confirms correct IDL with paused field. Bundle hash matches local build.
+- Verdict: **Eliminated** — browser is serving correct code
+
+**Hypothesis 2: .did file mismatch**
+- Evidence for: .did was missing `paused` in EventSeries and UpdateSeriesInput
+- Evidence against: The .did file is used by dfx CLI, not by agent-js in the browser. The frontend IDL factory is embedded in the JS bundle. After fixing .did AND verifying frontend IDL, error persists.
+- Verdict: **Partially relevant** — dfx CLI needed it, but not the root cause for frontend
+
+**Hypothesis 3: Candid wire format field ordering**
+- Evidence for: Candid records are encoded by field hash, not by declaration order. If there's a mismatch in how the Rust encoder and JS decoder hash field names, a field could be "missing"
+- Evidence against: `list_event_series` decodes the same struct fine. `toggle_series_pause` returns the same type and works.
+- Verdict: **Unlikely** — same type works for other endpoints
+
+**Hypothesis 4: `from_bytes` migration fallback issue**
+- Evidence for: Old series stored without `paused` needed migration in `from_bytes`
+- Evidence against: The migration runs on `list_event_series` queries too, and those work. Also, `toggle_series_pause` writes the series back with `paused` set, and reading it back works.
+- Verdict: **Eliminated** — migration works for reads
+
+**Hypothesis 5: Update call response is handled differently by agent-js**
+- This is the most promising unexplored hypothesis
+- Update calls go through consensus and the response is wrapped in a certificate
+- Query calls return raw Candid bytes
+- The agent-js library may decode update call responses differently
+- But `toggle_series_pause` is also an update call and works...
+- The only remaining difference: `update_event_series` takes `UpdateSeriesInput` as a parameter, while `toggle_series_pause` takes just `Vec<u8>`
+
+### What To Try Next
+
+1. **Capture the full error stack trace**: Add `console.error(err)` before `setError(err.message)` in the EditSeriesForm's catch block. The stack trace will show exactly which Candid field is being decoded when it fails, and whether it's the request encoding or response decoding.
+
+2. **Check if the error is in REQUEST encoding, not response decoding**: The error "Record is missing key 'paused'" might be thrown during *encoding* of the `UpdateSeriesInput`, not during decoding of the response. The frontend's `updateInput` object does NOT include `paused`:
+   ```typescript
+   const updateInput = {
+     title: [title.trim()],
+     notes: [notes.trim()],
+     end_date: ...,
+     default_duration_minutes: [...],
+     color: ...,
+     // ← NO paused field!
+   };
+   ```
+   While the IDL defines `UpdateSeriesInput` as having `'paused': IDL.Opt(IDL.Bool)`, the actual JS object doesn't include `paused` at all. Agent-js may be strict about this and require all fields to be present (even optional ones must be sent as `[]`).
+
+   **This is the most likely root cause.** The fix would be to add `paused: []` to the updateInput object (empty array = Candid `None` for optional fields).
+
+3. **Test hypothesis #2 quickly**: In browser console, manually call `actor.update_event_series(seriesId, { title: ["test"], notes: [""], end_date: [[]], default_duration_minutes: [60], color: [[]], paused: [] })` and see if it succeeds.
+
+4. **Check if list_event_series also has an encoding issue**: `list_event_series` takes no arguments, so there's no input to encode. This aligns with why it works — the error is in input encoding, not output decoding.
+
+5. **Verify toggle_series_pause**: This endpoint only takes `Vec<u8>` (series_id), which is simple to encode. No record with optional fields to mess up.
+
+### Key Insight
+
+The error message "Record is missing key 'paused'" is ambiguous — it could mean:
+- The **response** record is missing the key (Candid decode failure)
+- The **request** record is missing the key (Candid encode failure)
+
+Given that:
+- The backend returns `paused` correctly (verified via dfx)
+- The `UpdateSeriesInput` IDL has `paused: IDL.Opt(IDL.Bool)` but the JS object omits it
+- Agent-js may require all Record fields to be present, even optional ones (as `[]` for None)
+
+**The fix is almost certainly: add `paused: []` to the updateInput object in EditSeriesForm.**
+
+### Additional Note: Identity Polling Loop
+
+The console logs also reveal the 1-second identity polling in `useBackend` is creating actors in a tight loop (15+ actor recreations at the same timestamp). The `currentPrincipal` state comparison against `cachedIdentityPrincipal` has a race condition where the state update hasn't propagated before the next interval fires. This is a separate issue but should be addressed — either debounce the polling or use a ref instead of state for the comparison.
+
+---
