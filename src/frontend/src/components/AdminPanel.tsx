@@ -684,6 +684,7 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
   const [startTime, setStartTime] = useState('14:00');
   const [endDate, setEndDate] = useState('');
   const [duration, setDuration] = useState('60');
+  const [color, setColor] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -732,6 +733,7 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
         start_date: dateToNanos(startDateTime),
         end_date: endDate ? [dateToNanos(new Date(endDate + 'T23:59:59'))] : [],
         default_duration_minutes: duration ? [parseInt(duration)] : [],
+        color: color ? [color] : [],
       };
       const result = await actor.create_event_series(input);
       if ('Ok' in result) onSuccess();
@@ -764,6 +766,15 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
         <div style={styles.formRowHalf}><label style={styles.label}>Start Time</label><input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} style={styles.input} required /></div>
       </div>
       <div style={styles.formRow}><label style={styles.label}>End Date (optional)</label><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={styles.input} /></div>
+      <div style={styles.formRow}>
+        <label style={styles.label}>Color</label>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <button type="button" onClick={() => setColor('')} style={{ width: '28px', height: '28px', borderRadius: '6px', border: !color ? `2px solid ${theme.textPrimary}` : `1px solid ${theme.border}`, background: theme.surface, cursor: 'pointer', fontSize: '10px', color: theme.textMuted, display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Auto (based on title)">A</button>
+          {SERIES_COLORS.map((c, i) => (
+            <button key={i} type="button" onClick={() => setColor(i.toString())} title={c.label} style={{ width: '28px', height: '28px', borderRadius: '6px', background: c.border, border: color === i.toString() ? '2px solid white' : '2px solid transparent', cursor: 'pointer', boxShadow: color === i.toString() ? `0 0 0 2px ${c.border}` : 'none', transition: 'box-shadow 0.15s' }} />
+          ))}
+        </div>
+      </div>
       {previewDates.length > 0 && (
         <div style={styles.previewSection}>
           <div style={styles.previewTitle}>Preview — next {previewDates.length} occurrence{previewDates.length !== 1 ? 's' : ''}</div>

@@ -114,6 +114,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'start_date': IDL.Nat64,
     'end_date': IDL.Opt(IDL.Nat64),
     'default_duration_minutes': IDL.Opt(IDL.Nat32),
+    'color': IDL.Opt(IDL.Text),
   });
 
 
@@ -289,6 +290,7 @@ export interface CreateSeriesInput {
   start_date: bigint;
   end_date: [bigint] | [];
   default_duration_minutes: [number] | [];
+  color: [string] | [];
 }
 
 
