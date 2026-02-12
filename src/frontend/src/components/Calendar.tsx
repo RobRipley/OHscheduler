@@ -615,6 +615,7 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
                 onChange={setSelectedUserId}
                 placeholder="Select a host..."
                 searchable={activeUsers.length > 5}
+                dropUp
                 style={{ flex: 1 }}
               />
               <Button variant="primary" onClick={handleAssignHost} loading={actionLoading} disabled={!selectedUserId}>

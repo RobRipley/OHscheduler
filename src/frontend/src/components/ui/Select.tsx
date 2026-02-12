@@ -14,6 +14,7 @@ interface SelectProps {
   placeholder?: string;
   searchable?: boolean;
   disabled?: boolean;
+  dropUp?: boolean;
   style?: React.CSSProperties;
 }
 
@@ -24,6 +25,7 @@ export default function Select({
   placeholder = 'Select...',
   searchable = false,
   disabled = false,
+  dropUp = false,
   style,
 }: SelectProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -119,7 +121,10 @@ export default function Select({
 
       {/* Dropdown */}
       {isOpen && (
-        <div style={dropdown} onKeyDown={handleKeyDown}>
+        <div style={{
+          ...dropdown,
+          ...(dropUp ? { bottom: 'calc(100% + 4px)', top: 'auto' } : {}),
+        }} onKeyDown={handleKeyDown}>
           {searchable && (
             <div style={searchWrap}>
               <input
