@@ -1026,6 +1026,7 @@ function EditSeriesForm({ actor, triggerSessionExpired, series, onSuccess, onCan
         end_date: endDate ? [[dateToNanos(new Date(endDate + 'T23:59:59'))]] : [[]],
         default_duration_minutes: [parseInt(duration)],
         color: color ? [[color]] : [[]],
+        paused: [],
       };
       const result = await actor.update_event_series(series.series_id, updateInput);
       if ('Ok' in result) onSuccess();
