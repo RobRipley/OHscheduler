@@ -51,6 +51,7 @@ type EventSeries = record {
     series_id: blob;
     title: text;
     notes: text;
+    link: opt text;
     frequency: Frequency;
     weekday: Weekday;
     weekday_ordinal: opt WeekdayOrdinal;
@@ -58,6 +59,7 @@ type EventSeries = record {
     end_date: opt nat64;
     default_duration_minutes: nat32;
     color: opt text;
+    paused: bool;
     created_at: nat64;
     created_by: principal;
 };
@@ -69,6 +71,7 @@ type EventInstance = record {
     end_utc: nat64;
     title: text;
     notes: text;
+    link: opt text;
     host_principal: opt principal;
     status: EventStatus;
     color: opt text;

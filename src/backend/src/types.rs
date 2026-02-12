@@ -453,6 +453,41 @@ impl Storable for EventSeries {
         match Decode!(bytes.as_ref(), Self) {
             Ok(s) => s,
             Err(_) => {
+                // Try decoding as mid-version EventSeries (has color but no paused)
+                #[derive(CandidType, Deserialize)]
+                struct MidEventSeries {
+                    series_id: [u8; 16],
+                    title: String,
+                    notes: String,
+                    link: Option<String>,
+                    frequency: Frequency,
+                    weekday: Weekday,
+                    weekday_ordinal: Option<WeekdayOrdinal>,
+                    start_date: u64,
+                    end_date: Option<u64>,
+                    default_duration_minutes: u32,
+                    color: Option<String>,
+                    created_at: u64,
+                    created_by: Principal,
+                }
+                if let Ok(mid) = Decode!(bytes.as_ref(), MidEventSeries) {
+                    return EventSeries {
+                        series_id: mid.series_id,
+                        title: mid.title,
+                        notes: mid.notes,
+                        link: mid.link,
+                        frequency: mid.frequency,
+                        weekday: mid.weekday,
+                        weekday_ordinal: mid.weekday_ordinal,
+                        start_date: mid.start_date,
+                        end_date: mid.end_date,
+                        default_duration_minutes: mid.default_duration_minutes,
+                        color: mid.color,
+                        paused: false,
+                        created_at: mid.created_at,
+                        created_by: mid.created_by,
+                    };
+                }
                 // Try decoding as old EventSeries format (without color, paused)
                 #[derive(CandidType, Deserialize)]
                 struct OldEventSeries {
