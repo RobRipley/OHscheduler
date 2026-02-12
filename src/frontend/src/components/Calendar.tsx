@@ -742,7 +742,7 @@ function getErrorMessage(err: any): string {
 
 const styles: { [key: string]: React.CSSProperties } = {
   container: { padding: 0 },
-  createBtn: { padding: '8px 16px', background: theme.accent, color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500 },
+  createBtn: { padding: '6px 12px', background: 'transparent', color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 500, transition: 'all 150ms ease-out' },
   viewToggle: { display: 'flex', gap: '2px', background: theme.surface, padding: '2px', borderRadius: '8px', border: `1px solid ${theme.border}` },
   viewBtn: { padding: '8px 16px', border: 'none', background: 'transparent', color: theme.textMuted, borderRadius: '6px', cursor: 'pointer', fontSize: '14px', transition: 'all 150ms ease-out' },
   viewBtnActive: { padding: '8px 16px', border: 'none', background: theme.accent, color: '#fff', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' },
@@ -751,7 +751,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   navRight: { display: 'flex', alignItems: 'center', gap: '8px', flex: '1 1 0', justifyContent: 'flex-end' },
   navBtn: { padding: '8px 14px', border: `1px solid ${theme.border}`, background: theme.surface, color: theme.textSecondary, borderRadius: theme.radiusSm, cursor: 'pointer', fontSize: '14px' },
   todayBtn: { padding: '8px 14px', border: `1px solid ${theme.accent}`, background: 'transparent', color: theme.accent, borderRadius: theme.radiusSm, cursor: 'pointer', fontSize: '14px', fontWeight: 500 },
-  dateHeader: { fontSize: '18px', fontWeight: 600, textAlign: 'center', color: theme.textPrimary, flex: '0 0 auto' },
+  dateHeader: { fontSize: '16px', fontWeight: 500, textAlign: 'center', color: theme.textPrimary, flex: '0 0 auto' },
   loading: { background: theme.surface, padding: '40px', borderRadius: '12px', textAlign: 'center', color: theme.textMuted, border: `1px solid ${theme.border}` },
   error: { background: 'rgba(248, 113, 113, 0.1)', color: '#F87171', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', border: '1px solid rgba(248, 113, 113, 0.2)' },
   
