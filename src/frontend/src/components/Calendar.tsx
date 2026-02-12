@@ -236,7 +236,12 @@ export default function Calendar() {
         </div>
         <span style={styles.dateHeader}>{formatDateHeader()}</span>
         <div style={styles.navRight} className="cal-controls">
-          <button style={styles.createBtn} onClick={() => setShowCreateModal(true)}>+ New Event</button>
+          <button style={styles.createBtn} onClick={() => setShowCreateModal(true)} title="New Event" aria-label="New Event">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </button>
           <div style={styles.viewToggle}>
             <button style={viewMode === 'agenda' ? styles.viewBtnActive : styles.viewBtn} onClick={() => setViewMode('agenda')}>Agenda</button>
             <button style={viewMode === 'week' ? styles.viewBtnActive : styles.viewBtn} onClick={() => setViewMode('week')}>Week</button>
@@ -742,7 +747,7 @@ function getErrorMessage(err: any): string {
 
 const styles: { [key: string]: React.CSSProperties } = {
   container: { padding: 0 },
-  createBtn: { padding: '6px 12px', background: 'transparent', color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 500, transition: 'all 150ms ease-out' },
+  createBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', background: 'transparent', color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '6px', cursor: 'pointer', transition: 'all 150ms ease-out' },
   viewToggle: { display: 'flex', gap: '2px', background: theme.surface, padding: '2px', borderRadius: '8px', border: `1px solid ${theme.border}` },
   viewBtn: { padding: '8px 16px', border: 'none', background: 'transparent', color: theme.textMuted, borderRadius: '6px', cursor: 'pointer', fontSize: '14px', transition: 'all 150ms ease-out' },
   viewBtnActive: { padding: '8px 16px', border: 'none', background: theme.accent, color: '#fff', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' },
