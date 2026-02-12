@@ -2,8 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useBackend, EventInstance, nanosToDate, dateToNanos, bytesToHex, User, isSessionExpiredError } from '../hooks/useBackend';
 import { useAuth } from '../hooks/useAuth';
 import { useTimezone } from '../hooks/useTimezone';
-import { Modal, Button, Select, SkeletonCalendar } from './ui';
-import type { SelectOption } from './ui';
+import { Modal, Button, SkeletonCalendar } from './ui';
 import { getSeriesColor, NO_HOST_COLOR } from '../utils/seriesColors';
 import { theme } from '../theme';
 
@@ -561,12 +560,6 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
   };
 
   // Build select options for host picker
-  const hostOptions: SelectOption[] = activeUsers.map(u => ({
-    value: u.principal.toText(),
-    label: u.name,
-    sublabel: u.email || undefined,
-  }));
-
   return (
     <Modal open={true} onClose={onClose} title={event.title} maxWidth="420px">
         {isCancelled && <div style={modalStyles.cancelledBadge}>Cancelled</div>}
@@ -603,16 +596,37 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
         <div style={modalStyles.actions}>
           {!isCancelled && isNoHost && (
             <div style={modalStyles.assignSection}>
-              <Select
-                options={hostOptions}
-                value={selectedUserId}
-                onChange={setSelectedUserId}
-                placeholder="Select a host..."
-                searchable={activeUsers.length > 5}
-                style={{ flex: 1 }}
-              />
+              <span style={modalStyles.detailLabel}>Assign Host</span>
+              <div style={modalStyles.userList}>
+                {activeUsers
+                  .sort((a, b) => {
+                    const aIsMe = a.principal.toText() === currentUser?.principal?.toText();
+                    const bIsMe = b.principal.toText() === currentUser?.principal?.toText();
+                    if (aIsMe) return -1;
+                    if (bIsMe) return 1;
+                    return a.name.localeCompare(b.name);
+                  })
+                  .map(u => {
+                    const uid = u.principal.toText();
+                    const isMe = uid === currentUser?.principal?.toText();
+                    const isSelected = selectedUserId === uid;
+                    return (
+                      <button
+                        key={uid}
+                        type="button"
+                        onClick={() => setSelectedUserId(isSelected ? '' : uid)}
+                        style={{
+                          ...modalStyles.userChip,
+                          ...(isSelected ? modalStyles.userChipSelected : {}),
+                        }}
+                      >
+                        {u.name}{isMe ? ' (me)' : ''}
+                      </button>
+                    );
+                  })}
+              </div>
               <Button variant="primary" onClick={handleAssignHost} loading={actionLoading} disabled={!selectedUserId}>
-                Assign host
+                Assign
               </Button>
             </div>
           )}
@@ -808,7 +822,10 @@ const modalStyles: { [key: string]: React.CSSProperties } = {
   detailValue: { fontSize: '15px', color: theme.textPrimary },
   error: { background: 'rgba(248, 113, 113, 0.1)', color: '#F87171', padding: '10px 12px', borderRadius: '8px', marginTop: '16px', fontSize: '14px', border: '1px solid rgba(248, 113, 113, 0.2)' },
   actions: { marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '10px' },
-  assignSection: { display: 'flex', gap: '10px', alignItems: 'stretch' },
+  assignSection: { display: 'flex', flexDirection: 'column', gap: '8px' },
+  userList: { display: 'flex', flexWrap: 'wrap', gap: '6px' },
+  userChip: { padding: '6px 12px', background: theme.surfaceElevated, color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '16px', cursor: 'pointer', fontSize: '13px', fontWeight: 500, transition: 'all 150ms ease-out' },
+  userChipSelected: { background: theme.accentFocus, color: theme.accent, borderColor: theme.accent },
   userSelect: { flex: 1, padding: '12px 14px', background: theme.inputSurface, color: theme.textPrimary, border: `1px solid ${theme.borderInput}`, borderRadius: '8px', fontSize: '14px', cursor: 'pointer', outline: 'none' },
   primaryBtn: { padding: '12px 20px', background: theme.accent, color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500, transition: 'background 150ms ease-out' },
   secondaryBtn: { padding: '12px 20px', background: 'transparent', color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500, transition: 'all 150ms ease-out' },
