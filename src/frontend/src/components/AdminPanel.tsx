@@ -5,7 +5,7 @@ import { useAuth } from '../hooks/useAuth';
 import { Principal } from '@dfinity/principal';
 import { useConfirm, Toggle, Modal, Button, SkeletonTable } from './ui';
 import { theme } from '../theme';
-import { SERIES_COLORS } from '../utils/seriesColors';
+import { SERIES_COLORS, getSeriesColor } from '../utils/seriesColors';
 
 export default function AdminPanel() {
   const { isAdmin } = useAuth();
@@ -847,7 +847,7 @@ function EventSeriesManagement() {
           {series.map(s => {
             const key = bytesToHex(s.series_id as number[]);
             return (
-              <div key={key} style={{ ...styles.seriesCard, borderLeft: `3px solid ${s.color?.[0] || theme.accent}`, ...(s.paused ? { opacity: 0.6 } : {}) }}>
+              <div key={key} style={{ ...styles.seriesCard, borderLeft: `3px solid ${getSeriesColor(s.title, s.color?.[0]).border}`, ...(s.paused ? { opacity: 0.6 } : {}) }}>
                 <div style={styles.seriesInfo}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={styles.seriesTitle}>{s.title}</div>
