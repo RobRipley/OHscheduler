@@ -414,7 +414,39 @@ impl Storable for EventInstance {
     }
 
     fn from_bytes(bytes: Cow<[u8]>) -> Self {
-        Decode!(bytes.as_ref(), Self).unwrap()
+        match Decode!(bytes.as_ref(), Self) {
+            Ok(i) => i,
+            Err(_) => {
+                // Try decoding as old EventInstance format (without color)
+                #[derive(CandidType, Deserialize)]
+                struct OldEventInstance {
+                    instance_id: [u8; 16],
+                    series_id: Option<[u8; 16]>,
+                    start_utc: u64,
+                    end_utc: u64,
+                    title: String,
+                    notes: String,
+                    link: Option<String>,
+                    host_principal: Option<Principal>,
+                    status: EventStatus,
+                    created_at: u64,
+                }
+                let old = Decode!(bytes.as_ref(), OldEventInstance).unwrap();
+                EventInstance {
+                    instance_id: old.instance_id,
+                    series_id: old.series_id,
+                    start_utc: old.start_utc,
+                    end_utc: old.end_utc,
+                    title: old.title,
+                    notes: old.notes,
+                    link: old.link,
+                    host_principal: old.host_principal,
+                    status: old.status,
+                    color: None,
+                    created_at: old.created_at,
+                }
+            }
+        }
     }
 
     const BOUND: Bound = Bound::Bounded {
