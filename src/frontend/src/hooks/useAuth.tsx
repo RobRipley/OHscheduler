@@ -277,38 +277,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[Auth] Login already in progress, skipping');
       return;
     }
-    if (!authClient) {
-      console.warn('[Auth] No authClient available, cannot login');
-      return;
+    
+    // If no authClient, try creating one fresh
+    let client = authClient;
+    if (!client) {
+      console.log('[Auth] No authClient available, creating fresh one');
+      client = await AuthClient.create();
+      setAuthClient(client);
     }
     
     loginInProgressRef.current = true;
     
     // Clear any expired session state before attempting login
     setIsSessionExpired(false);
+    setIsLoading(true);
     
     // Max delegation expiry: 30 days (in nanoseconds)
     const thirtyDaysInNanoseconds = BigInt(30 * 24 * 60 * 60 * 1000 * 1000 * 1000);
     
     console.log('[Auth] Calling authClient.login with provider:', getIdentityProviderUrl());
     try {
-      await authClient.login({
+      await client.login({
         identityProvider: getIdentityProviderUrl(),
         maxTimeToLive: thirtyDaysInNanoseconds,
         onSuccess: async () => {
           console.log('[Auth] Login success callback');
           loginInProgressRef.current = false;
-          const identity = authClient.getIdentity();
-          await checkAuthorizationAndSetState(identity, authClient);
+          const identity = client!.getIdentity();
+          await checkAuthorizationAndSetState(identity, client!);
         },
         onError: (error) => {
           console.error('[Auth] Login error:', error);
           loginInProgressRef.current = false;
+          setIsLoading(false);
         },
       });
     } catch (e) {
       console.error('[Auth] Login exception:', e);
       loginInProgressRef.current = false;
+      setIsLoading(false);
     }
     console.log('[Auth] authClient.login returned');
   }, [authClient, checkAuthorizationAndSetState]);

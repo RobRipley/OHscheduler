@@ -26,10 +26,21 @@ export default function Login() {
     }
   };
   
-  if (isLoading) {
+  if (isLoading && !signingIn) {
     return (
       <div style={styles.container}>
-        <div style={styles.loading}>Loading...</div>
+        <div style={styles.card}>
+          <img src="/yieldschool_inc_logo.jpeg" alt="Yieldschool" style={styles.logo} />
+          <h1 style={styles.title}>Office Hours</h1>
+          <p style={styles.subtitle}>Checking session...</p>
+          <Button
+            variant="primary"
+            onClick={handleLogin}
+            style={{ width: '100%', padding: '14px 24px', fontSize: '15px', borderRadius: '10px', marginBottom: '16px' }}
+          >
+            Sign in with Internet Identity
+          </Button>
+        </div>
       </div>
     );
   }
