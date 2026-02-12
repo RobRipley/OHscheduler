@@ -28,9 +28,18 @@ const publicIdlFactory = ({ IDL }: { IDL: any }) => {
     'org_tagline': IDL.Opt(IDL.Text),
     'org_logo_url': IDL.Opt(IDL.Text),
   });
+  const ApiError = IDL.Variant({
+    'Unauthorized': IDL.Null,
+    'NotFound': IDL.Null,
+    'InvalidInput': IDL.Text,
+    'Conflict': IDL.Text,
+    'InternalError': IDL.Text,
+  });
+  const Result_String = IDL.Variant({ 'Ok': IDL.Text, 'Err': ApiError });
   return IDL.Service({
     'list_events_public': IDL.Func([IDL.Nat64, IDL.Nat64], [IDL.Vec(PublicEventView)], ['query']),
     'get_org_settings': IDL.Func([], [GlobalSettings], ['query']),
+    'get_event_ics_public': IDL.Func([IDL.Vec(IDL.Nat8)], [Result_String], ['query']),
   });
 };
 
@@ -52,6 +61,7 @@ export default function PublicCalendar() {
   const [orgName, setOrgName] = useState('Office Hours');
   const [orgTagline, setOrgTagline] = useState('');
   const [orgLogoUrl, setOrgLogoUrl] = useState('/yieldschool_inc_logo.jpeg');
+  const actorRef = useRef<any>(null);
   const { isAuthenticated, isAuthorized, login } = useAuth();
   const navigate = useNavigate();
 
@@ -126,6 +136,7 @@ export default function PublicCalendar() {
         }
         
         const actor = Actor.createActor(publicIdlFactory, { agent, canisterId: BACKEND_CANISTER_ID });
+        actorRef.current = actor;
         
         const start = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
         const end = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0, 23, 59, 59, 999);
@@ -201,6 +212,32 @@ export default function PublicCalendar() {
   const todayKey = getDateKeyInTz(BigInt(Date.now()) * BigInt(1_000_000));
   const isCurrentMonth = (date: Date) => date.getMonth() === currentMonth.getMonth();
   const [selectedEvent, setSelectedEvent] = useState<PublicEvent | null>(null);
+  const [icsLoading, setIcsLoading] = useState(false);
+  const [icsError, setIcsError] = useState<string | null>(null);
+
+  const handleDownloadIcs = async (event: PublicEvent) => {
+    if (!actorRef.current) return;
+    setIcsLoading(true);
+    setIcsError(null);
+    try {
+      const result = await actorRef.current.get_event_ics_public(event.instance_id) as any;
+      if ('Ok' in result) {
+        const blob = new Blob([result.Ok], { type: 'text/calendar' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${event.title.replace(/\s+/g, '_')}.ics`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        setIcsError('Failed to generate calendar file');
+      }
+    } catch {
+      setIcsError('Failed to download calendar file');
+    } finally {
+      setIcsLoading(false);
+    }
+  };
 
   // Compute stats for the month
   const monthStats = useMemo(() => {
@@ -418,7 +455,7 @@ export default function PublicCalendar() {
 
         {/* Event Detail Modal (read-only for public) */}
         {selectedEvent && (
-          <Modal open={true} onClose={() => setSelectedEvent(null)} title={selectedEvent.title} maxWidth="420px">
+          <Modal open={true} onClose={() => { setSelectedEvent(null); setIcsError(null); }} title={selectedEvent.title} maxWidth="420px">
             <div style={pubModalStyles.detail}>
               <span style={pubModalStyles.label}>DATE</span>
               <span style={pubModalStyles.value}>{new Date(Number(selectedEvent.start_utc / BigInt(1_000_000))).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: timezone })}</span>
@@ -451,6 +488,14 @@ export default function PublicCalendar() {
                 >
                   Join Meeting →
                 </a>
+              </div>
+            )}
+            {icsError && <div style={{ color: '#F87171', fontSize: '13px', marginTop: '12px' }}>{icsError}</div>}
+            {'Active' in selectedEvent.status && (
+              <div style={{ marginTop: '16px' }}>
+                <Button variant="secondary" onClick={() => handleDownloadIcs(selectedEvent)} loading={icsLoading}>
+                  📅 Add to Calendar
+                </Button>
               </div>
             )}
           </Modal>

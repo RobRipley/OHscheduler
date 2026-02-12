@@ -97,6 +97,7 @@ type PublicEventView = record {
     instance_id: blob;
     title: text;
     notes: text;
+    link: opt text;
     start_utc: nat64;
     end_utc: nat64;
     host_name: opt text;
@@ -168,6 +169,7 @@ service : {
 
     // Events - Public
     list_events_public : (nat64, nat64) -> (vec PublicEventView) query;
+    get_event_ics_public : (blob) -> (Result_String) query;
 
     // Events - Authenticated
     list_events : (nat64, nat64) -> (Result_Vec_EventInstance) query;

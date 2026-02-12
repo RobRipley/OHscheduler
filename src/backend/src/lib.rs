@@ -181,6 +181,34 @@ fn delete_user(principal: Principal) -> ApiResult<()> {
 // Events - Public
 // ============================================================================
 
+/// Get ICS content for an event (public, no auth required)
+#[query]
+fn get_event_ics_public(instance_id: Vec<u8>) -> Result<String, ApiError> {
+    let iid: [u8; 16] = instance_id.try_into()
+        .map_err(|_| ApiError::InvalidInput("Invalid instance_id".to_string()))?;
+
+    let settings = storage::get_settings();
+    let now = ic_cdk::api::time();
+    let window_end = recurrence::calculate_window_end(now, settings.forward_window_months);
+
+    let events = recurrence::materialize_events(0, window_end);
+    let event = events.into_iter()
+        .find(|e| e.instance_id == iid)
+        .ok_or(ApiError::NotFound)?;
+
+    Ok(notifications::generate_ics(
+        &event.instance_id,
+        &event.title,
+        &event.notes,
+        event.link.as_deref(),
+        event.start_utc,
+        event.end_utc,
+        "REQUEST",
+        1,
+        event.status == EventStatus::Cancelled,
+    ))
+}
+
 /// List events for public calendar (no auth required)
 #[query]
 fn list_events_public(window_start: u64, window_end: u64) -> Vec<PublicEventView> {
