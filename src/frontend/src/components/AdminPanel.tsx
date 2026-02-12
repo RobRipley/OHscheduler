@@ -5,6 +5,7 @@ import { useAuth } from '../hooks/useAuth';
 import { Principal } from '@dfinity/principal';
 import { useConfirm, Toggle, Modal, Button, SkeletonTable } from './ui';
 import { theme } from '../theme';
+import { SERIES_COLORS } from '../utils/seriesColors';
 
 export default function AdminPanel() {
   const { isAdmin } = useAuth();
@@ -785,6 +786,7 @@ function EditSeriesForm({ actor, triggerSessionExpired, series, onSuccess, onCan
   const [notes, setNotes] = useState(series.notes);
   const [endDate, setEndDate] = useState(series.end_date.length > 0 ? nanosToDate(series.end_date[0] as bigint).toISOString().split('T')[0] : '');
   const [duration, setDuration] = useState(series.default_duration_minutes.toString());
+  const [color, setColor] = useState(series.color?.[0] || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -799,6 +801,7 @@ function EditSeriesForm({ actor, triggerSessionExpired, series, onSuccess, onCan
         notes: [notes.trim()],
         end_date: endDate ? [[dateToNanos(new Date(endDate + 'T23:59:59'))]] : [[]],
         default_duration_minutes: [parseInt(duration)],
+        color: color ? [[color]] : [[]],
       };
       const result = await actor.update_event_series(series.series_id, updateInput);
       if ('Ok' in result) onSuccess();
@@ -832,6 +835,15 @@ function EditSeriesForm({ actor, triggerSessionExpired, series, onSuccess, onCan
       <div style={styles.formRowGroup}>
         <div style={styles.formRowHalf}><label style={styles.label}>Duration</label><select value={duration} onChange={e => setDuration(e.target.value)} style={styles.select}><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option></select></div>
         <div style={styles.formRowHalf}><label style={styles.label}>End Date (optional)</label><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={styles.input} /></div>
+      </div>
+      <div style={styles.formRow}>
+        <label style={styles.label}>Color</label>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <button type="button" onClick={() => setColor('')} style={{ width: '28px', height: '28px', borderRadius: '6px', border: !color ? `2px solid ${theme.textPrimary}` : `1px solid ${theme.border}`, background: theme.surface, cursor: 'pointer', fontSize: '10px', color: theme.textMuted, display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Auto (based on title)">A</button>
+          {SERIES_COLORS.map((c, i) => (
+            <button key={i} type="button" onClick={() => setColor(i.toString())} title={c.label} style={{ width: '28px', height: '28px', borderRadius: '6px', background: c.border, border: color === i.toString() ? '2px solid white' : '2px solid transparent', cursor: 'pointer', boxShadow: color === i.toString() ? `0 0 0 2px ${c.border}` : 'none', transition: 'box-shadow 0.15s' }} />
+          ))}
+        </div>
       </div>
       <div style={styles.formActions}><button type="button" onClick={onCancel} style={styles.cancelBtn}>Cancel</button><button type="submit" disabled={loading} style={styles.submitBtn}>{loading ? 'Saving...' : 'Save Changes'}</button></div>
     </form>

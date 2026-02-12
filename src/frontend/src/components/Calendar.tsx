@@ -281,7 +281,7 @@ export default function Calendar() {
                       {dayEvents.slice(0, 4).map(event => {
                         const isNoHost = event.host_principal.length === 0;
                         const hostName = getHostName(event.host_principal);
-                        const color = isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title);
+                        const color = isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title, event.color?.[0]);
                         return (
                           <div
                             key={bytesToHex(event.instance_id as number[])}
@@ -337,7 +337,7 @@ export default function Calendar() {
                   ) : (
                     dayEvents.map(event => {
                       const isNoHost = event.host_principal.length === 0;
-                      const color = isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title);
+                      const color = isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title, event.color?.[0]);
                       return (
                       <div
                         key={bytesToHex(event.instance_id as number[])}
@@ -380,7 +380,7 @@ export default function Calendar() {
               lastDate = dateStr;
               const isNoHost = event.host_principal.length === 0;
               const hostName = getHostName(event.host_principal);
-              const color = isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title);
+              const color = isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title, event.color?.[0]);
               const isPast = eventDate < new Date();
               return (
                 <div key={bytesToHex(event.instance_id as number[])}>

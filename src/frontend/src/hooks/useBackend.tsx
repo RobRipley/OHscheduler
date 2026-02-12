@@ -74,6 +74,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'link': IDL.Opt(IDL.Text),
     'host_principal': IDL.Opt(IDL.Principal),
     'status': EventStatus,
+    'color': IDL.Opt(IDL.Text),
     'created_at': IDL.Nat64,
   });
 
@@ -239,6 +240,7 @@ export interface EventInstance {
   link: [string] | [];
   host_principal: [Principal] | [];
   status: { Active: null } | { Cancelled: null };
+  color: [string] | [];
   created_at: bigint;
 }
 

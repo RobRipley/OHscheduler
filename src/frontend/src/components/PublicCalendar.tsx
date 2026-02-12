@@ -19,6 +19,7 @@ const publicIdlFactory = ({ IDL }: { IDL: any }) => {
     'link': IDL.Opt(IDL.Text),
     'host_name': IDL.Opt(IDL.Text),
     'status': IDL.Variant({ 'Active': IDL.Null, 'Cancelled': IDL.Null }),
+    'color': IDL.Opt(IDL.Text),
   });
   const GlobalSettings = IDL.Record({
     'forward_window_months': IDL.Nat8,
@@ -43,6 +44,7 @@ interface PublicEvent {
   link: [string] | [];
   host_name: [string] | [];
   status: { Active: null } | { Cancelled: null };
+  color: [string] | [];
 }
 
 export default function PublicCalendar() {
@@ -355,7 +357,7 @@ export default function PublicCalendar() {
                         {dayEvents.filter(e => 'Active' in e.status).slice(0, 4).map((event, idx) => {
                           const isNoHost = event.host_name.length === 0;
                           const hostName = isNoHost ? 'No host' : event.host_name[0];
-                          const color = isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title);
+                          const color = isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title, event.color?.[0]);
                           return (
                             <div key={idx} style={{
                               ...styles.eventCard,
@@ -395,7 +397,7 @@ export default function PublicCalendar() {
                 const showDate = dateStr !== lastDate;
                 lastDate = dateStr;
                 const isNoHost = event.host_name.length === 0;
-                const color = isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title);
+                const color = isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title, event.color?.[0]);
                 return (
                   <div key={idx}>
                     {showDate && <div style={styles.agendaDate}>{dateStr}</div>}
