@@ -203,21 +203,6 @@ function UserManagement() {
                       <button style={styles.iconBtn} onClick={() => setEditingUser(user)} title="Edit" aria-label={`Edit ${user.name}`}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                       </button>
-                      {isPending ? (
-                        <button style={styles.iconBtnAccent} onClick={() => setLinkingUser(user)} title="Link Identity" aria-label={`Link identity for ${user.name}`}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>
-                        </button>
-                      ) : (
-                        <button style={styles.iconBtn} onClick={() => handleToggleStatus(user)} disabled={actionLoading === key} title={isActive ? 'Disable' : 'Enable'} aria-label={`${isActive ? 'Disable' : 'Enable'} ${user.name}`}>
-                          {actionLoading === key ? <span style={{ fontSize: '12px' }}>...</span> : (
-                            isActive ? (
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="4.93" y1="4.93" x2="19.07" y2="19.07" /></svg>
-                            ) : (
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                            )
-                          )}
-                        </button>
-                      )}
                       <button 
                         style={styles.iconBtnDanger} 
                         onClick={() => handleDeleteUser(user)} 
@@ -428,6 +413,17 @@ function EditUserModal({ user, actor, triggerSessionExpired, onSuccess, onCancel
   const [role, setRole] = useState<'Admin' | 'User'>('Admin' in user.role ? 'Admin' : 'User');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [statusLoading, setStatusLoading] = useState(false);
+  
+  // For pending users: link principal
+  const [newPrincipal, setNewPrincipal] = useState('');
+  const [linkLoading, setLinkLoading] = useState(false);
+  
+  const isPending = (() => {
+    const bytes = user.principal.toUint8Array();
+    return bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFF;
+  })();
+  const isActive = 'Active' in user.status;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -457,22 +453,87 @@ function EditUserModal({ user, actor, triggerSessionExpired, onSuccess, onCancel
     }
   };
 
+  const handleToggleStatus = async () => {
+    if (!actor) return;
+    setStatusLoading(true);
+    setError(null);
+    try {
+      const result = isActive
+        ? await actor.disable_user(user.principal)
+        : await actor.enable_user(user.principal);
+      if ('Ok' in result) {
+        onSuccess();
+      } else {
+        setError(getErrorMessage(result.Err));
+      }
+    } catch (err: any) {
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setError('Session expired.');
+      } else {
+        setError(err.message || 'Failed to update status');
+      }
+    } finally {
+      setStatusLoading(false);
+    }
+  };
+
+  const handleLinkPrincipal = async () => {
+    if (!actor || !newPrincipal.trim()) return;
+    setLinkLoading(true);
+    setError(null);
+    try {
+      const newPrincipalObj = Principal.fromText(newPrincipal.trim());
+      const roleVariant = 'Admin' in user.role ? { Admin: null } : { User: null };
+      const createResult = await actor.authorize_user(newPrincipalObj, user.name, user.email, roleVariant);
+      if ('Err' in createResult) {
+        setError(getErrorMessage(createResult.Err));
+        return;
+      }
+      await actor.disable_user(user.principal);
+      onSuccess();
+    } catch (err: any) {
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setError('Session expired.');
+      } else {
+        setError(err.message || 'Invalid principal format');
+      }
+    } finally {
+      setLinkLoading(false);
+    }
+  };
+
   return (
     <Modal open={true} onClose={onCancel} title="Edit User">
         {error && <div style={styles.formError}>{error}</div>}
         
-        {(() => {
-          const bytes = user.principal.toUint8Array();
-          const isPlaceholder = bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFF;
-          return !isPlaceholder;
-        })() && (
-          <div style={styles.formRow}>
-            <label style={styles.label}>Principal</label>
+        {/* Principal section */}
+        <div style={styles.formRow}>
+          <label style={styles.label}>Principal</label>
+          {isPending ? (
+            <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '8px' }}>
+              <div style={{ fontSize: '13px', color: theme.textMuted, fontStyle: 'italic' }}>No principal linked yet</div>
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <input 
+                  type="text" 
+                  value={newPrincipal}
+                  onChange={e => setNewPrincipal(e.target.value)}
+                  placeholder="xxxxx-xxxxx-xxxxx-xxxxx-cai"
+                  style={styles.input}
+                />
+                <Button variant="primary" size="sm" onClick={handleLinkPrincipal} loading={linkLoading} disabled={!newPrincipal.trim()}>
+                  Add Principal
+                </Button>
+              </div>
+              <div style={styles.fieldHint}>Enter the Internet Identity principal for this user.</div>
+            </div>
+          ) : (
             <div style={styles.lockedField}>
               <code style={styles.lockedFieldText}>{user.principal.toText()}</code>
             </div>
-          </div>
-        )}
+          )}
+        </div>
         
         <form onSubmit={handleSubmit}>
           <div style={styles.formRow}>
@@ -506,6 +567,29 @@ function EditUserModal({ user, actor, triggerSessionExpired, onSuccess, onCancel
               <option value="Admin">Admin</option>
             </select>
           </div>
+
+          {/* Status toggle - only for non-pending users */}
+          {!isPending && (
+            <div style={{ ...styles.formRow, paddingTop: '12px', borderTop: `1px solid ${theme.border}` }}>
+              <label style={styles.label}>Status</label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '14px', fontWeight: 500, color: isActive ? '#34D399' : '#F87171' }}>
+                  {isActive ? 'Active' : 'Disabled'}
+                </span>
+                <Button 
+                  variant="secondary" 
+                  size="sm" 
+                  onClick={handleToggleStatus} 
+                  loading={statusLoading}
+                >
+                  {isActive ? 'Disable User' : 'Enable User'}
+                </Button>
+              </div>
+              <div style={styles.fieldHint}>
+                {isActive ? 'Disabling prevents this user from signing in or being assigned as host.' : 'Enabling restores sign-in access and host eligibility.'}
+              </div>
+            </div>
+          )}
           
           <div style={styles.formActions}>
             <Button variant="secondary" onClick={onCancel} type="button">Cancel</Button>
@@ -679,10 +763,20 @@ function EventSeriesManagement() {
                   {s.notes && <div style={styles.seriesNotes}>{s.notes}</div>}
                 </div>
                 <div style={styles.seriesActions}>
-                  <button style={styles.iconBtn} onClick={() => handleTogglePause(s)}>{s.paused ? 'Resume' : 'Pause'}</button>
-                  <button style={styles.iconBtn} onClick={() => { setEditingSeries(s); setShowAddForm(false); }}>Edit</button>
-                  <button style={styles.iconBtnDanger} onClick={() => handleDelete(s)} disabled={deletingId === key}>
-                    {deletingId === key ? '...' : 'Delete'}
+                  <button style={styles.iconBtn} onClick={() => handleTogglePause(s)} title={s.paused ? 'Resume series' : 'Pause series'} aria-label={s.paused ? 'Resume series' : 'Pause series'}>
+                    {s.paused ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3" /></svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>
+                    )}
+                  </button>
+                  <button style={styles.iconBtn} onClick={() => { setEditingSeries(s); setShowAddForm(false); }} title="Edit series" aria-label="Edit series">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                  </button>
+                  <button style={styles.iconBtnDanger} onClick={() => handleDelete(s)} disabled={deletingId === key} title="Delete series" aria-label="Delete series">
+                    {deletingId === key ? <span style={{ fontSize: '12px' }}>...</span> : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                    )}
                   </button>
                 </div>
               </div>
@@ -1049,9 +1143,11 @@ function Reports() {
 
   return (
     <div>
-      <h3 style={styles.sectionTitle}>Coverage Reports</h3>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <p style={styles.reportSubtitle}>Next 60 days</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <div>
+          <h3 style={styles.sectionTitle}>Coverage Reports</h3>
+          <p style={{ ...styles.reportSubtitle, marginBottom: 0 }}>Next 60 days</p>
+        </div>
         <button style={styles.addBtn} onClick={async () => {
           if (!actor) return;
           try {
@@ -1218,7 +1314,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   checkbox: { width: '18px', height: '18px', accentColor: theme.accent },
   pausedLabel: { color: '#F87171', fontWeight: 500, fontSize: '14px' },
   activeLabel: { color: '#34D399', fontWeight: 500, fontSize: '14px' },
-  reportSubtitle: { color: theme.textMuted, marginTop: '-16px', marginBottom: '24px', fontSize: '14px' },
+  reportSubtitle: { color: theme.textMuted, marginTop: '4px', marginBottom: '16px', fontSize: '14px' },
   reportSectionTitle: { marginTop: '32px', marginBottom: '16px', fontSize: '16px', color: theme.textPrimary, fontWeight: 600 },
   statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' },
   statCard: { background: theme.surfaceElevated, borderRadius: '10px', padding: '20px', textAlign: 'center' as const, border: `1px solid ${theme.border}` },
