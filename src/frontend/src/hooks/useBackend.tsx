@@ -542,25 +542,57 @@ export function useBackend() {
   const [actor, setActor] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [sessionExpired, setSessionExpired] = useState(false);
+  const [currentPrincipal, setCurrentPrincipal] = useState<string | null>(null);
 
+  // Re-init actor whenever we detect the identity has changed
+  const initActor = useCallback(async () => {
+    try {
+      const authClient = await AuthClient.create();
+      const identity = authClient.getIdentity();
+      const principalText = identity.getPrincipal().toText();
+      
+      // Skip if principal hasn't changed
+      if (principalText === currentPrincipal && cachedActor) {
+        setActor(cachedActor);
+        setLoading(false);
+        return;
+      }
+      
+      const backendActor = await createActor(identity);
+      setActor(backendActor);
+      setCurrentPrincipal(principalText);
+    } catch (err) {
+      console.error('[useBackend] Failed to init backend actor:', err);
+      if (isSessionExpiredError(err)) {
+        setSessionExpired(true);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [currentPrincipal]);
+
+  // Init on mount
   useEffect(() => {
-    async function init() {
+    initActor();
+  }, [initActor]);
+
+  // Also poll for identity changes (handles post-login race condition)
+  useEffect(() => {
+    const interval = setInterval(async () => {
       try {
         const authClient = await AuthClient.create();
         const identity = authClient.getIdentity();
-        const backendActor = await createActor(identity);
-        setActor(backendActor);
-      } catch (err) {
-        console.error('[useBackend] Failed to init backend actor:', err);
-        if (isSessionExpiredError(err)) {
-          setSessionExpired(true);
+        const principalText = identity.getPrincipal().toText();
+        if (principalText !== currentPrincipal) {
+          console.log('[useBackend] Identity change detected, reinitializing actor...');
+          cachedActor = null;
+          cachedIdentityPrincipal = null;
+          initActor();
         }
-      } finally {
-        setLoading(false);
-      }
-    }
-    init();
-  }, []);
+      } catch (_) { /* ignore */ }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [currentPrincipal, initActor]);
 
   const triggerSessionExpired = useCallback(() => {
     setSessionExpired(true);
