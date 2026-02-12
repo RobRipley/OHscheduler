@@ -66,6 +66,18 @@ export default function AuthenticatedLayout() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Close timezone dropdown on Escape
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showTzSelector) {
+        setShowTzSelector(false);
+        setTzSearch('');
+      }
+    };
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [showTzSelector]);
+
   return (
     <div style={styles.container}>
       {/* Session Expired Banner */}
@@ -83,13 +95,13 @@ export default function AuthenticatedLayout() {
         </div>
       )}
       
-      <header style={styles.header}>
-        <div style={styles.headerContent}>
-          <div style={styles.logoGroup}>
+      <header style={styles.header} className="app-header">
+        <div style={styles.headerContent} className="app-header-content">
+          <div style={styles.logoGroup} className="app-logo-group">
             <img src="/yieldschool_inc_logo.jpeg" alt="Yieldschool" style={styles.logoImg} />
             <h1 style={styles.logo}>Office Hours</h1>
           </div>
-          <nav style={styles.nav}>
+          <nav style={styles.nav} className="app-nav">
             <NavLink 
               to="/dashboard" 
               end
@@ -121,7 +133,7 @@ export default function AuthenticatedLayout() {
               </NavLink>
             )}
           </nav>
-          <div style={styles.userSection}>
+          <div style={styles.userSection} className="app-user-section">
             <NotificationBell />
             
             {/* Timezone Selector */}
@@ -180,7 +192,7 @@ export default function AuthenticatedLayout() {
         </div>
       </header>
       
-      <main style={styles.main}>
+      <main style={styles.main} className="app-main">
         <Routes>
           <Route index element={<Calendar />} />
           <Route path="queue" element={<CoverageQueue />} />

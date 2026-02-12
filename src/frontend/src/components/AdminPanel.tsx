@@ -210,6 +210,7 @@ function UserManagement() {
                         onClick={() => handleDeleteUser(user)} 
                         disabled={actionLoading === key + '-delete'}
                         title="Delete"
+                        aria-label={`Delete user ${user.name}`}
                       >
                         {actionLoading === key + '-delete' ? '...' : '×'}
                       </button>

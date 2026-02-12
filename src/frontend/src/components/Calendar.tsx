@@ -227,9 +227,9 @@ export default function Calendar() {
 
   return (
     <div style={styles.container}>
-      <div style={styles.headerRow}>
+      <div style={styles.headerRow} className="cal-header-row">
         <h2 style={styles.header}>Calendar</h2>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }} className="cal-controls">
           <button style={styles.createBtn} onClick={() => setShowCreateModal(true)}>+ New Event</button>
           <div style={styles.timezoneNote}>{abbrev}</div>
           <div style={styles.viewToggle}>
