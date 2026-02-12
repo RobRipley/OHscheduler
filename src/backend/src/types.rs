@@ -298,6 +298,59 @@ pub type ApiResult<T> = Result<T, ApiError>;
 
 
 // ============================================================================
+// Invite Code
+// ============================================================================
+
+#[derive(CandidType, Deserialize, Clone, Debug)]
+pub struct InviteCode {
+    pub code: String,
+    pub user_placeholder_principal: Principal,
+    pub created_at: u64,
+    pub created_by: Principal,
+    pub expires_at: u64,
+    pub redeemed: bool,
+    pub redeemed_by: Option<Principal>,
+    pub redeemed_at: Option<u64>,
+}
+
+const MAX_INVITE_CODE_SIZE: u32 = 512;
+
+impl Storable for InviteCode {
+    fn to_bytes(&self) -> Cow<[u8]> {
+        Cow::Owned(Encode!(self).unwrap())
+    }
+
+    fn from_bytes(bytes: Cow<[u8]>) -> Self {
+        Decode!(bytes.as_ref(), Self).unwrap()
+    }
+
+    const BOUND: Bound = Bound::Bounded {
+        max_size: MAX_INVITE_CODE_SIZE,
+        is_fixed_size: false,
+    };
+}
+
+/// Stable-storage key wrapper for invite codes (max 15 chars like "YS-XXXX-XXXX")
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct InviteCodeKey(pub String);
+
+impl Storable for InviteCodeKey {
+    fn to_bytes(&self) -> Cow<[u8]> {
+        Cow::Owned(self.0.as_bytes().to_vec())
+    }
+
+    fn from_bytes(bytes: Cow<[u8]>) -> Self {
+        Self(String::from_utf8(bytes.to_vec()).unwrap())
+    }
+
+    const BOUND: Bound = Bound::Bounded {
+        max_size: 20,
+        is_fixed_size: false,
+    };
+}
+
+
+// ============================================================================
 // Storable Implementations for ic-stable-structures
 // ============================================================================
 

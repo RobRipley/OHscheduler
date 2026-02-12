@@ -7,6 +7,7 @@
 //! - Memory 3: OneOffInstances (Uuid -> EventInstance)
 //! - Memory 4: GlobalSettings (StableCell)
 //! - Memory 5: NotificationJobs (Uuid -> NotificationJob)
+//! - Memory 6: InviteCodes (InviteCodeKey -> InviteCode)
 
 use crate::types::*;
 use candid::Principal;
@@ -25,6 +26,7 @@ const OVERRIDES_MEM_ID: MemoryId = MemoryId::new(2);
 const INSTANCES_MEM_ID: MemoryId = MemoryId::new(3);
 const SETTINGS_MEM_ID: MemoryId = MemoryId::new(4);
 const NOTIFICATIONS_MEM_ID: MemoryId = MemoryId::new(5);
+const INVITE_CODES_MEM_ID: MemoryId = MemoryId::new(6);
 
 
 thread_local! {
@@ -65,6 +67,12 @@ thread_local! {
     static NOTIFICATIONS: RefCell<StableBTreeMap<Uuid, NotificationJob, Memory>> = RefCell::new(
         StableBTreeMap::init(
             MEMORY_MANAGER.with(|m| m.borrow().get(NOTIFICATIONS_MEM_ID))
+        )
+    );
+
+    static INVITE_CODES: RefCell<StableBTreeMap<InviteCodeKey, InviteCode, Memory>> = RefCell::new(
+        StableBTreeMap::init(
+            MEMORY_MANAGER.with(|m| m.borrow().get(INVITE_CODES_MEM_ID))
         )
     );
 }
@@ -232,4 +240,22 @@ pub fn list_pending_notifications() -> Vec<NotificationJob> {
 
 pub fn update_notification(job: NotificationJob) {
     insert_notification(job);
+}
+
+// ============================================================================
+// InviteCode Storage
+// ============================================================================
+
+pub fn get_invite_code(code: &str) -> Option<InviteCode> {
+    INVITE_CODES.with(|c| c.borrow().get(&InviteCodeKey(code.to_string())))
+}
+
+pub fn insert_invite_code(invite: InviteCode) {
+    INVITE_CODES.with(|c| {
+        c.borrow_mut().insert(InviteCodeKey(invite.code.clone()), invite);
+    });
+}
+
+pub fn list_all_invite_codes() -> Vec<InviteCode> {
+    INVITE_CODES.with(|c| c.borrow().iter().map(|(_, v)| v).collect())
 }

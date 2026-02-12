@@ -585,4 +585,140 @@ fn get_event_ics(instance_id: Vec<u8>) -> ApiResult<String> {
 // Candid export
 // ============================================================================
 
+// ============================================================================
+// Invite Code System
+// ============================================================================
+
+/// Generate an invite code for a pending user (admin only)
+/// Uses raw_rand() for cryptographic randomness — must be an update call.
+#[update]
+async fn generate_invite_code(user_placeholder_principal: Principal) -> ApiResult<InviteCode> {
+    let admin = auth::require_admin()?;
+    
+    // Verify user exists
+    let user = storage::get_user(&user_placeholder_principal)
+        .ok_or(ApiError::NotFound)?;
+    
+    // Verify user has a placeholder principal (0xFF 0xFF prefix)
+    let bytes = user_placeholder_principal.as_slice();
+    if bytes.len() < 2 || bytes[0] != 0xFF || bytes[1] != 0xFF {
+        return Err(ApiError::InvalidInput(
+            "User does not have a placeholder principal. Invite codes are only for pending users.".to_string()
+        ));
+    }
+    
+    // Check for existing active (non-redeemed, non-expired) invite for this user
+    let now = ic_cdk::api::time();
+    let existing = storage::list_all_invite_codes();
+    for code in &existing {
+        if code.user_placeholder_principal == user_placeholder_principal 
+           && !code.redeemed 
+           && code.expires_at > now {
+            // Return the existing active code
+            return Ok(code.clone());
+        }
+    }
+    
+    // Generate random bytes via management canister
+    let (random_bytes,): (Vec<u8>,) = ic_cdk::api::management_canister::main::raw_rand()
+        .await
+        .map_err(|e| ApiError::InternalError(format!("Failed to generate random bytes: {:?}", e)))?;
+    
+    // Characters excluding ambiguous ones (0/O, 1/I/L)
+    let charset: &[u8] = b"ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+    
+    // Generate "YS-XXXX-XXXX"
+    let mut code_chars = String::from("YS-");
+    for i in 0..4 {
+        let idx = (random_bytes[i] as usize) % charset.len();
+        code_chars.push(charset[idx] as char);
+    }
+    code_chars.push('-');
+    for i in 4..8 {
+        let idx = (random_bytes[i] as usize) % charset.len();
+        code_chars.push(charset[idx] as char);
+    }
+    
+    let invite = InviteCode {
+        code: code_chars,
+        user_placeholder_principal,
+        created_at: now,
+        created_by: admin.principal,
+        expires_at: now + 7 * 24 * 60 * 60 * 1_000_000_000, // 7 days in nanoseconds
+        redeemed: false,
+        redeemed_by: None,
+        redeemed_at: None,
+    };
+    
+    storage::insert_invite_code(invite.clone());
+    Ok(invite)
+}
+
+/// Redeem an invite code — links the caller's II principal to a pre-created user record.
+/// Caller must be authenticated via II but does NOT need to be authorized.
+#[update]
+fn redeem_invite_code(code: String) -> ApiResult<User> {
+    // Must be authenticated (not anonymous) but NOT necessarily authorized
+    let caller_principal = auth::require_authenticated()?;
+    
+    // Check caller isn't already an authorized user
+    if storage::user_exists(&caller_principal) {
+        return Err(ApiError::Conflict("You are already an authorized user.".to_string()));
+    }
+    
+    let code_upper = code.trim().to_uppercase();
+    
+    let mut invite = storage::get_invite_code(&code_upper)
+        .ok_or(ApiError::InvalidInput("Invalid invite code.".to_string()))?;
+    
+    let now = ic_cdk::api::time();
+    
+    if invite.redeemed {
+        return Err(ApiError::InvalidInput("This invite code has already been used.".to_string()));
+    }
+    
+    if invite.expires_at < now {
+        return Err(ApiError::InvalidInput("This invite code has expired.".to_string()));
+    }
+    
+    // Get the placeholder user record
+    let old_user = storage::get_user(&invite.user_placeholder_principal)
+        .ok_or(ApiError::InternalError("Associated user record not found.".to_string()))?;
+    
+    // Create new user with caller's real principal, copying all data from placeholder
+    let new_user = User {
+        principal: caller_principal,
+        name: old_user.name,
+        email: old_user.email,
+        role: old_user.role,
+        status: UserStatus::Active,
+        out_of_office: vec![],
+        notification_settings: NotificationSettings::default(),
+        last_active: now,
+        sessions_hosted_count: 0,
+        created_at: now,
+        updated_at: now,
+    };
+    
+    storage::insert_user(new_user.clone());
+    
+    // Remove the old placeholder user
+    storage::delete_user(&invite.user_placeholder_principal);
+    
+    // Mark invite as redeemed
+    invite.redeemed = true;
+    invite.redeemed_by = Some(caller_principal);
+    invite.redeemed_at = Some(now);
+    storage::insert_invite_code(invite);
+    
+    Ok(new_user)
+}
+
+/// List all invite codes (admin only)
+#[query]
+fn list_invite_codes() -> ApiResult<Vec<InviteCode>> {
+    auth::require_admin()?;
+    Ok(storage::list_all_invite_codes())
+}
+
 ic_cdk::export_candid!();

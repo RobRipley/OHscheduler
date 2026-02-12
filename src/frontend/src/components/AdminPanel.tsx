@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Routes, Route, NavLink } from 'react-router-dom';
-import { useBackend, User, EventSeries, GlobalSettings, CoverageStats, nanosToDate, bytesToHex, dateToNanos, CreateSeriesInput, isSessionExpiredError } from '../hooks/useBackend';
+import { useBackend, User, EventSeries, GlobalSettings, CoverageStats, InviteCode, nanosToDate, bytesToHex, dateToNanos, CreateSeriesInput, isSessionExpiredError } from '../hooks/useBackend';
 import { useAuth } from '../hooks/useAuth';
 import { Principal } from '@dfinity/principal';
 import { useConfirm, Toggle, Modal, Button, SkeletonTable } from './ui';
@@ -56,6 +56,9 @@ function UserManagement() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [linkingUser, setLinkingUser] = useState<User | null>(null);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [inviteCodes, setInviteCodes] = useState<InviteCode[]>([]);
+  const [generatingInvite, setGeneratingInvite] = useState<string | null>(null);
+  const [showInviteCode, setShowInviteCode] = useState<{ user: User; code: string } | null>(null);
 
   // Check if a principal is a placeholder (starts with 0xFFFF)
   const isPlaceholderPrincipal = (principal: Principal): boolean => {
@@ -67,9 +70,13 @@ function UserManagement() {
     if (!actor) return;
     setLoading(true);
     try {
-      const result = await actor.list_users();
-      if ('Ok' in result) setUsers(result.Ok);
-      else setError(getErrorMessage(result.Err));
+      const [usersResult, codesResult] = await Promise.all([
+        actor.list_users(),
+        actor.list_invite_codes(),
+      ]);
+      if ('Ok' in usersResult) setUsers(usersResult.Ok);
+      else setError(getErrorMessage(usersResult.Err));
+      if ('Ok' in codesResult) setInviteCodes(codesResult.Ok);
     } catch (err) {
       if (isSessionExpiredError(err)) {
         triggerSessionExpired();
@@ -136,6 +143,38 @@ function UserManagement() {
     }
   };
 
+  // Get invite code for a user (if any)
+  const getInviteForUser = (user: User): InviteCode | undefined => {
+    const now = Date.now() * 1_000_000; // current time in nanos
+    return inviteCodes.find(c => 
+      c.user_placeholder_principal.toText() === user.principal.toText()
+    );
+  };
+
+  const handleGenerateInvite = async (user: User) => {
+    if (!actor) return;
+    const key = user.principal.toText();
+    setGeneratingInvite(key);
+    setError(null);
+    try {
+      const result = await actor.generate_invite_code(user.principal);
+      if ('Ok' in result) {
+        setShowInviteCode({ user, code: result.Ok.code });
+        fetchUsers(); // refresh to get updated invite codes
+      } else {
+        setError(getErrorMessage(result.Err));
+      }
+    } catch (err: any) {
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+      } else {
+        setError(err.message || 'Failed to generate invite code');
+      }
+    } finally {
+      setGeneratingInvite(null);
+    }
+  };
+
   if (actorLoading || loading) return <SkeletonTable rows={5} cols={5} />;
 
   return (
@@ -150,6 +189,7 @@ function UserManagement() {
       {showAddForm && <AddUserForm actor={actor} triggerSessionExpired={triggerSessionExpired} onSuccess={() => { setShowAddForm(false); fetchUsers(); }} onCancel={() => setShowAddForm(false)} />}
       {linkingUser && <LinkPrincipalModal user={linkingUser} actor={actor} triggerSessionExpired={triggerSessionExpired} onSuccess={() => { setLinkingUser(null); fetchUsers(); }} onCancel={() => setLinkingUser(null)} />}
       {editingUser && <EditUserModal user={editingUser} actor={actor} triggerSessionExpired={triggerSessionExpired} onSuccess={() => { setEditingUser(null); fetchUsers(); }} onCancel={() => setEditingUser(null)} />}
+      {showInviteCode && <InviteCodeModal code={showInviteCode.code} userName={showInviteCode.user.name} onClose={() => setShowInviteCode(null)} />}
       <div style={styles.tableContainer}>
         <table style={styles.table}>
           <thead>
@@ -183,7 +223,17 @@ function UserManagement() {
                   <td style={styles.td}><span style={isAdminRole ? styles.adminBadge : styles.userBadge}>{isAdminRole ? 'Admin' : 'User'}</span></td>
                   <td style={styles.td}>
                     {isPending ? (
-                      <span style={styles.pendingBadge}>Pending</span>
+                      (() => {
+                        const invite = getInviteForUser(user);
+                        const now = Date.now() * 1_000_000;
+                        if (invite && invite.redeemed) {
+                          return <span style={styles.activeBadge}>Linked</span>;
+                        } else if (invite && Number(invite.expires_at) > now) {
+                          return <span style={styles.inviteSentBadge}>Invite Sent</span>;
+                        } else {
+                          return <span style={styles.pendingBadge}>Pending</span>;
+                        }
+                      })()
                     ) : (
                       <span style={isActive ? styles.activeBadge : styles.disabledBadge}>{isActive ? 'Active' : 'Disabled'}</span>
                     )}
@@ -200,6 +250,24 @@ function UserManagement() {
                   </td>
                   <td style={styles.td}>
                     <div style={styles.actionGroup}>
+                      {isPending && (
+                        <button 
+                          style={styles.inviteBtn} 
+                          onClick={() => handleGenerateInvite(user)} 
+                          disabled={generatingInvite === key}
+                          title="Generate invite code"
+                          aria-label={`Generate invite code for ${user.name}`}
+                        >
+                          {generatingInvite === key ? (
+                            <span style={{ fontSize: '12px' }}>...</span>
+                          ) : (
+                            <>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>
+                              <span style={{ fontSize: '12px', fontWeight: 500 }}>Invite</span>
+                            </>
+                          )}
+                        </button>
+                      )}
                       <button style={styles.iconBtn} onClick={() => setEditingUser(user)} title="Edit" aria-label={`Edit ${user.name}`}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                       </button>
@@ -598,6 +666,63 @@ function EditUserModal({ user, actor, triggerSessionExpired, onSuccess, onCancel
             </Button>
           </div>
         </form>
+    </Modal>
+  );
+}
+
+// ============== INVITE CODE MODAL ==============
+function InviteCodeModal({ code, userName, onClose }: { code: string; userName: string; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+
+  const copyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  return (
+    <Modal open={true} onClose={onClose} title="Invite Code Generated">
+      <div style={{ textAlign: 'center', padding: '8px 0 16px' }}>
+        <p style={{ fontSize: '14px', color: theme.textSecondary, margin: '0 0 20px 0', lineHeight: 1.5 }}>
+          Share this code with <strong style={{ color: theme.textPrimary }}>{userName}</strong> so they can activate their account.
+        </p>
+        
+        <div style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '2px',
+          padding: '16px 24px',
+          background: theme.bg,
+          borderRadius: '12px',
+          border: `1.5px dashed ${theme.borderInput}`,
+          marginBottom: '16px',
+        }}>
+          <span style={{
+            fontSize: '28px',
+            fontWeight: 700,
+            fontFamily: "'JetBrains Mono', 'SF Mono', 'Fira Code', monospace",
+            letterSpacing: '0.08em',
+            color: theme.accent,
+          }}>{code}</span>
+        </div>
+        
+        <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginTop: '4px' }}>
+          <Button variant="primary" onClick={copyCode}>
+            {copied ? '✓ Copied!' : 'Copy Code'}
+          </Button>
+          <Button variant="secondary" onClick={onClose}>
+            Done
+          </Button>
+        </div>
+        
+        <p style={{ fontSize: '12px', color: theme.textMuted, margin: '16px 0 0 0' }}>
+          This code expires in 7 days. The user enters it on the sign-in page.
+        </p>
+      </div>
     </Modal>
   );
 }
@@ -1330,6 +1455,8 @@ const styles: { [key: string]: React.CSSProperties } = {
   // Pending user styles
   pendingText: { fontSize: '11px', color: '#FBBF24', fontStyle: 'italic' },
   pendingBadge: { background: 'rgba(251, 191, 36, 0.15)', color: '#FBBF24', padding: '3px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500 },
+  inviteSentBadge: { background: 'rgba(99, 102, 241, 0.15)', color: theme.accent, padding: '3px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500 },
+  inviteBtn: { display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', background: theme.accentMuted, color: theme.accent, border: `1px solid rgba(99, 102, 241, 0.3)`, borderRadius: '6px', cursor: 'pointer', transition: 'all 150ms ease-out', whiteSpace: 'nowrap' as const },
   emptyField: { color: theme.textMuted },
   linkBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '30px', height: '30px', background: 'rgba(99, 102, 241, 0.15)', color: theme.accent, border: `1px solid rgba(99, 102, 241, 0.3)`, borderRadius: '6px', cursor: 'pointer', transition: 'all 150ms ease-out' },
   optionalLabel: { color: theme.textMuted, fontWeight: 400, fontSize: '12px' },

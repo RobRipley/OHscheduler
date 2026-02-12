@@ -367,3 +367,31 @@ label[style*="text-transform: uppercase"] {
     flex-wrap: wrap !important;
   }
 }
+
+
+/* Invite code input focus */
+.invite-code-focus:focus {
+  border-color: #6366F1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2) !important;
+}
+
+/* Progress slide animation for success state */
+@keyframes progressSlide {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+
+/* Divider line */
+.invite-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 28px 0;
+}
+.invite-divider::before,
+.invite-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #1F2937;
+}

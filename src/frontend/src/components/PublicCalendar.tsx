@@ -279,20 +279,38 @@ export default function PublicCalendar() {
         </div>
 
         <div style={styles.monthNav}>
-          <button 
-            onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
-            style={styles.navButton}
-          >
-            Previous
-          </button>
-          <h2 style={styles.monthTitle}>
-            {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-          </h2>
+          <div style={styles.navLeft}>
+            <button 
+              onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
+              style={styles.navButton}
+            >
+              ‹
+            </button>
+            <button
+              onClick={() => setCurrentMonth(new Date())}
+              style={styles.navButton}
+            >
+              Today
+            </button>
+          </div>
+          <div style={styles.navCenter}>
+            <h2 style={styles.monthTitle}>
+              {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+            </h2>
+            {!loading && events.length > 0 && (
+              <div style={styles.monthSummary}>
+                {monthStats.total} session{monthStats.total !== 1 ? 's' : ''}
+                {monthStats.needsHost > 0 && (
+                  <span style={styles.needsHostSummary}> · {monthStats.needsHost} need host</span>
+                )}
+              </div>
+            )}
+          </div>
           <button 
             onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
             style={styles.navButton}
           >
-            Next
+            ›
           </button>
         </div>
 
@@ -300,14 +318,6 @@ export default function PublicCalendar() {
           <SkeletonCalendar />
         ) : (
           <>
-            {/* Event count summary */}
-            <div style={styles.monthSummary}>
-              <span>{monthStats.total} session{monthStats.total !== 1 ? 's' : ''} this month</span>
-              {monthStats.needsHost > 0 && (
-                <span style={styles.needsHostSummary}> · {monthStats.needsHost} need{monthStats.needsHost !== 1 ? '' : 's'} host</span>
-              )}
-            </div>
-
             {/* Next upcoming session banner */}
             {nextSession && (
               <div style={styles.nextSessionBanner} onClick={() => setSelectedEvent(nextSession)}>
@@ -496,8 +506,10 @@ const styles: { [key: string]: React.CSSProperties } = {
   tzNoResults: { padding: '12px', textAlign: 'center', fontSize: '13px', color: theme.textMuted },
   
   monthNav: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' },
-  navButton: { padding: '8px 16px', background: theme.surface, color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '8px', cursor: 'pointer', fontSize: '14px' },
-  monthTitle: { fontSize: '18px', fontWeight: 600, margin: 0, color: theme.textPrimary },
+  navLeft: { display: 'flex', alignItems: 'center', gap: '8px' },
+  navButton: { padding: '6px 12px', background: theme.surface, color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '6px', cursor: 'pointer', fontSize: '14px' },
+  navCenter: { display: 'flex', flexDirection: 'column' as const, alignItems: 'center' },
+  monthTitle: { fontSize: '16px', fontWeight: 500, margin: 0, color: theme.textPrimary },
   loading: { textAlign: 'center', padding: '60px 20px', color: theme.textMuted, background: theme.surface, borderRadius: '12px', border: `1px solid ${theme.border}` },
   empty: { textAlign: 'center', padding: '60px 20px', background: theme.surface, borderRadius: '12px', marginTop: '20px', border: `1px solid ${theme.border}` },
   emptyText: { color: theme.textSecondary, margin: 0, fontSize: '15px' },
@@ -525,7 +537,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   moreEvents: { fontSize: '11px', color: theme.textMuted, padding: '4px 8px' },
 
   // Month summary
-  monthSummary: { fontSize: '13px', color: theme.textMuted, marginBottom: '12px' },
+  monthSummary: { fontSize: '12px', color: theme.textMuted, marginTop: '2px' },
   needsHostSummary: { color: '#F87171' },
 
   // Next session banner

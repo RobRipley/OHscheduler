@@ -140,6 +140,17 @@ type ApiError = variant {
     InternalError: text;
 };
 
+type InviteCode = record {
+    code: text;
+    user_placeholder_principal: principal;
+    created_at: nat64;
+    created_by: principal;
+    expires_at: nat64;
+    redeemed: bool;
+    redeemed_by: opt principal;
+    redeemed_at: opt nat64;
+};
+
 type Result_User = variant { Ok: User; Err: ApiError };
 type Result_Vec_User = variant { Ok: vec User; Err: ApiError };
 type Result_Unit = variant { Ok; Err: ApiError };
@@ -150,6 +161,8 @@ type Result_Vec_EventSeries = variant { Ok: vec EventSeries; Err: ApiError };
 type Result_GlobalSettings = variant { Ok: GlobalSettings; Err: ApiError };
 type Result_Vec_NotificationJob = variant { Ok: vec NotificationJob; Err: ApiError };
 type Result_String = variant { Ok: text; Err: ApiError };
+type Result_InviteCode = variant { Ok: InviteCode; Err: ApiError };
+type Result_Vec_InviteCode = variant { Ok: vec InviteCode; Err: ApiError };
 
 service : {
     // Auth / User
@@ -192,4 +205,9 @@ service : {
     list_pending_notifications : () -> (Result_Vec_NotificationJob) query;
     mark_notification_sent : (blob) -> (Result_Unit);
     get_event_ics : (blob) -> (Result_String) query;
+
+    // Invite Codes
+    generate_invite_code : (principal) -> (Result_InviteCode);
+    redeem_invite_code : (text) -> (Result_User);
+    list_invite_codes : () -> (Result_Vec_InviteCode) query;
 }

@@ -146,6 +146,19 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
   const Result_String = IDL.Variant({ 'Ok': IDL.Text, 'Err': ApiError });
   const Result_Vec_CoverageStats = IDL.Variant({ 'Ok': IDL.Vec(CoverageStats), 'Err': ApiError });
 
+  const InviteCode = IDL.Record({
+    'code': IDL.Text,
+    'user_placeholder_principal': IDL.Principal,
+    'created_at': IDL.Nat64,
+    'created_by': IDL.Principal,
+    'expires_at': IDL.Nat64,
+    'redeemed': IDL.Bool,
+    'redeemed_by': IDL.Opt(IDL.Principal),
+    'redeemed_at': IDL.Opt(IDL.Nat64),
+  });
+  const Result_InviteCode = IDL.Variant({ 'Ok': InviteCode, 'Err': ApiError });
+  const Result_Vec_InviteCode = IDL.Variant({ 'Ok': IDL.Vec(InviteCode), 'Err': ApiError });
+
   return IDL.Service({
     // Auth / User
     'get_current_user': IDL.Func([], [Result_User], ['query']),
@@ -198,6 +211,11 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
 
     // ICS
     'get_event_ics': IDL.Func([IDL.Vec(IDL.Nat8)], [Result_String], ['query']),
+
+    // Invite Codes
+    'generate_invite_code': IDL.Func([IDL.Principal], [Result_InviteCode], []),
+    'redeem_invite_code': IDL.Func([IDL.Text], [Result_User], []),
+    'list_invite_codes': IDL.Func([], [Result_Vec_InviteCode], ['query']),
   });
 };
 
@@ -278,6 +296,17 @@ export interface CoverageStats {
   assigned: number;
   unassigned: number;
   coverage_pct: number;
+}
+
+export interface InviteCode {
+  code: string;
+  user_placeholder_principal: Principal;
+  created_at: bigint;
+  created_by: Principal;
+  expires_at: bigint;
+  redeemed: boolean;
+  redeemed_by: [Principal] | [];
+  redeemed_at: [bigint] | [];
 }
 
 export interface CreateSeriesInput {
