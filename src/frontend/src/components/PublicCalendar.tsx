@@ -546,7 +546,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   // Next session banner (centered in header row)
   nextSessionBanner: { position: 'absolute' as const, left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 14px', background: `linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(99, 102, 241, 0.06))`, border: `1px solid rgba(99, 102, 241, 0.25)`, borderRadius: '8px', cursor: 'pointer', transition: 'border-color 0.15s', whiteSpace: 'nowrap' as const },
   nextSessionLabel: { fontSize: '10px', fontWeight: 700, color: theme.accent, textTransform: 'uppercase' as const, letterSpacing: '0.08em', whiteSpace: 'nowrap' as const, background: 'rgba(99, 102, 241, 0.15)', padding: '4px 8px', borderRadius: '4px' },
-  nextSessionInfo: { display: 'flex', flexWrap: 'wrap' as const, alignItems: 'center', gap: '4px 10px', fontSize: '14px', color: theme.textPrimary },
+  nextSessionInfo: { display: 'flex', flexWrap: 'nowrap' as const, alignItems: 'center', gap: '4px 10px', fontSize: '14px', color: theme.textPrimary, whiteSpace: 'nowrap' as const },
   nextSessionTime: { fontSize: '13px', color: theme.textSecondary },
   nextSessionHost: { fontSize: '13px', color: theme.accent },
   nextSessionArrow: { fontSize: '18px', color: theme.textMuted },
