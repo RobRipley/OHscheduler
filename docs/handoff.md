@@ -685,3 +685,179 @@ FROM_EMAIL = "noreply@yieldschool.com"
 Total estimated implementation time: ~2 hours for the core worker, assuming SendGrid account is set up.
 
 ---
+
+
+## 14. Critical Bug Report: React useCallback/useEffect Infinite Render Loop in useAuth
+
+**Date discovered:** 2026-02-12
+**Severity:** High — caused complete auth failure (sign-in button non-functional, /login stuck on "Loading...")
+**Affected file:** `src/frontend/src/hooks/useAuth.tsx`
+**Likely affects:** Any ICP frontend using a similar `AuthProvider` pattern with Internet Identity
+
+---
+
+### Symptoms
+
+1. Sign-in button appeared to do nothing (no II popup, no navigation)
+2. Navigating directly to `/login` showed infinite "Loading..." spinner
+3. Browser console flooded with hundreds of repeated `User authorized: Object` messages
+4. After signing out, the app appeared stuck — couldn't sign back in without manually clearing site data
+
+### Root Cause: useCallback Dependency Chain Creating Infinite Re-render Loop
+
+The `AuthProvider` component had three interconnected functions:
+
+```tsx
+// Function A: checks backend authorization, sets state
+const checkAuthorization = useCallback(async (identity, client) => {
+  // ... calls setUser(), setIsAuthorized(), setIsAdmin()
+}, []);  // Empty deps — looks safe, but isn't the real problem
+
+// Function B: wraps A, also sets state
+const handleAuthenticated = useCallback(async (client) => {
+  setIsAuthenticated(true);
+  setPrincipal(principalId);
+  await checkAuthorization(identity, client);  // calls A
+}, [checkAuthorization]);  // ← depends on A
+
+// Effect C: runs on mount and whenever B changes
+useEffect(() => {
+  AuthClient.create().then(async (client) => {
+    if (await client.isAuthenticated()) {
+      await handleAuthenticated(client);  // calls B
+    }
+    setIsLoading(false);
+  });
+}, [handleAuthenticated]);  // ← depends on B
+```
+
+**The loop:**
+
+```
+useEffect runs (because handleAuthenticated is in deps)
+  → handleAuthenticated() called
+    → checkAuthorization() called
+      → setUser(), setIsAuthorized(), setIsAdmin() — STATE CHANGES
+        → Component re-renders
+          → checkAuthorization reference may change (closure over new state)
+            → handleAuthenticated reference changes (depends on checkAuthorization)
+              → useEffect sees changed dependency
+                → useEffect runs again
+                  → INFINITE LOOP
+```
+
+Even though `checkAuthorization` had `[]` deps, the combination of:
+- Multiple state setters being called across the chain
+- React batching behavior in async contexts (pre-React 18 batching doesn't apply inside async/await)
+- `handleAuthenticated` depending on `checkAuthorization`
+- `useEffect` depending on `handleAuthenticated`
+
+...created a cascade where each render cycle produced a new function reference somewhere in the chain, re-triggering the effect.
+
+### Why It Wasn't Obvious
+
+- The app appeared to "work" in many cases because the public calendar route (`/`) doesn't require auth
+- The loop was burning CPU and network calls but the calendar still rendered from the public endpoint
+- The sign-in button navigated to `/login`, which showed "Loading..." because `isLoading` was being set to `false` and then the effect re-fired and the auth check ran again, creating a race condition
+- The `logout()` function cleared React state but the II delegation persisted in IndexedDB, so on next page load the `isAuthenticated()` check returned true and the loop resumed
+
+### The Fix
+
+Collapsed the three-function chain into a single stable function + a one-shot effect:
+
+```tsx
+// Single function that does everything — no dependency chain
+const checkAuthorizationAndSetState = useCallback(async (identity, client) => {
+  try {
+    const agent = new HttpAgent({ identity, host });
+    const actor = Actor.createActor(idlFactory, { agent, canisterId });
+    const result = await actor.get_current_user();
+
+    if (result.Ok) {
+      setUser(result.Ok);
+      setIsAuthenticated(true);
+      setPrincipal(identity.getPrincipal());
+      setIsAuthorized(true);
+      setIsAdmin('Admin' in result.Ok.role);
+    } else {
+      setIsAuthenticated(true);
+      setPrincipal(identity.getPrincipal());
+      setIsAuthorized(false);
+    }
+  } catch (error) {
+    // handle session expiry, etc.
+  } finally {
+    setIsLoading(false);
+  }
+}, []);  // Truly empty deps — this function never changes
+
+// Runs exactly once on mount
+useEffect(() => {
+  let cancelled = false;
+  AuthClient.create().then(async (client) => {
+    if (cancelled) return;
+    setAuthClient(client);
+    if (await client.isAuthenticated()) {
+      await checkAuthorizationAndSetState(identity, client);
+    } else {
+      setIsLoading(false);
+    }
+  });
+  return () => { cancelled = true; };
+}, []);  // Empty deps — runs once
+
+// Login uses the same stable function
+const login = useCallback(async () => {
+  await authClient.login({
+    onSuccess: async () => {
+      await checkAuthorizationAndSetState(authClient.getIdentity(), authClient);
+    },
+  });
+}, [authClient, checkAuthorizationAndSetState]);
+```
+
+Key principles applied:
+1. **One function, not a chain** — `checkAuthorizationAndSetState` does everything: creates agent, checks backend, sets all state, handles errors
+2. **Empty dependency arrays** — The function closes over only `setState` functions (which are stable by React guarantee) and module-level constants
+3. **One-shot useEffect** — The init effect has `[]` deps and runs exactly once
+4. **Cleanup flag** — The `cancelled` flag prevents state updates if the component unmounts during the async init
+
+### How to Check Other Projects for This Bug
+
+**Pattern to look for:**
+
+```
+useEffect depends on functionA
+  functionA = useCallback(..., [functionB])
+    functionB = useCallback(..., []) but calls setState
+```
+
+If you have a chain where:
+- A `useEffect` lists a `useCallback` in its dependency array
+- That `useCallback` depends on another `useCallback`
+- Any function in the chain calls `setState`
+
+...you likely have this bug, or will trigger it under certain conditions.
+
+**Safe pattern (what to refactor to):**
+
+```
+useEffect with [] deps — runs once
+  calls a single useCallback with [] deps
+    that useCallback does all state setting in one place
+```
+
+**Specific files to audit in other projects:**
+- Any `useAuth` / `AuthProvider` hook
+- Any hook that initializes a connection and then checks auth status
+- Any hook with multiple `useCallback` functions that depend on each other
+
+### Additional Bug Fixed in Same Session
+
+The `useAuth` IDL definition for `get_current_user` was missing two fields from the `User` type:
+- `last_active: IDL.Nat64`
+- `sessions_hosted_count: IDL.Nat32`
+
+The backend returned these fields but the frontend IDL didn't declare them. Candid can sometimes tolerate extra fields, but mismatches between the IDL and the actual response can cause silent deserialization failures depending on field ordering and types. Always ensure frontend IDL definitions exactly match the backend Candid interface.
+
+---
