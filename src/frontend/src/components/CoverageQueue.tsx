@@ -281,7 +281,6 @@ export default function CoverageQueue() {
   if (actorLoading || loading) {
     return (
       <div style={styles.container}>
-        <h2 style={styles.title}>Coverage Queue</h2>
         <p style={styles.subtitle}>Sessions that need a host assigned</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)}
@@ -304,10 +303,7 @@ export default function CoverageQueue() {
 
       {/* Header */}
       <div style={styles.header}>
-        <div>
-          <h2 style={styles.title}>Coverage Queue</h2>
-          <p style={styles.subtitle}>Sessions that need a host assigned</p>
-        </div>
+        <p style={styles.subtitle}>Sessions that need a host assigned</p>
         <button style={styles.refreshBtn} onClick={fetchEvents} disabled={loading}>
           Refresh
         </button>
@@ -409,8 +405,7 @@ export default function CoverageQueue() {
                 ...(isCovered ? styles.cardCovered : {}),
                 borderLeft: `3px solid ${seriesColor.border}`,
               }}>
-                {/* Row 1: Event info + badge */}
-                <div style={styles.cardRow1}>
+                <div style={styles.cardInner}>
                   <input
                     type="checkbox"
                     checked={selectedIds.has(eventKey)}
@@ -430,56 +425,44 @@ export default function CoverageQueue() {
                   {event.notes && (
                     <div style={styles.notesMid}>{event.notes}</div>
                   )}
-                  {isCovered && <span style={styles.coveredBadge}>Covered</span>}
-                </div>
-
-                {/* Row 2: Action row */}
-                {!isCovered && (
-                  <div style={styles.cardRow2}>
-                    {user && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => handleClaim(event)}
-                        loading={isAssigning && !selectedHost}
-                        disabled={isAssigning}
-                      >
-                        Claim
-                      </Button>
+                  <div style={styles.cardRight}>
+                    {isCovered ? (
+                      <span style={styles.coveredBadge}>Covered</span>
+                    ) : (
+                      <div style={styles.assignRow}>
+                        <Select
+                          options={(() => {
+                            const opts: SelectOption[] = [];
+                            if (user) {
+                              opts.push({ value: user.principal.toText(), label: `${user.name} (Me)` });
+                            }
+                            users
+                              .filter(u => !user || u.principal.toText() !== user.principal.toText())
+                              .forEach(u => {
+                                opts.push({ value: u.principal.toText(), label: u.name });
+                              });
+                            return opts;
+                          })()}
+                          value={selectedHost}
+                          onChange={(val) => setSelectedHosts(prev => ({ ...prev, [eventKey]: val }))}
+                          placeholder="Select a host..."
+                          searchable={users.length > 5}
+                          disabled={isAssigning}
+                          style={{ flex: 1, minWidth: '160px' }}
+                        />
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => handleAssign(event)}
+                          loading={isAssigning && !!selectedHost}
+                          disabled={!selectedHost}
+                        >
+                          Assign
+                        </Button>
+                      </div>
                     )}
-                    <div style={styles.assignRow}>
-                      <Select
-                        options={(() => {
-                          const opts: SelectOption[] = [];
-                          if (user) {
-                            opts.push({ value: user.principal.toText(), label: `${user.name} (Me)` });
-                          }
-                          users
-                            .filter(u => !user || u.principal.toText() !== user.principal.toText())
-                            .forEach(u => {
-                              opts.push({ value: u.principal.toText(), label: u.name });
-                            });
-                          return opts;
-                        })()}
-                        value={selectedHost}
-                        onChange={(val) => setSelectedHosts(prev => ({ ...prev, [eventKey]: val }))}
-                        placeholder="Select a host..."
-                        searchable={users.length > 5}
-                        disabled={isAssigning}
-                        style={{ flex: 1, minWidth: '160px' }}
-                      />
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => handleAssign(event)}
-                        loading={isAssigning && !!selectedHost}
-                        disabled={!selectedHost}
-                      >
-                        Assign
-                      </Button>
-                    </div>
                   </div>
-                )}
+                </div>
                 {isCovered && assignedHostName && (
                   <div style={styles.assignedHost}>
                     ✓ Assigned to {assignedHostName}
@@ -535,7 +518,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   header: {
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: '24px',
   },
   title: {
@@ -594,9 +577,6 @@ const styles: { [key: string]: React.CSSProperties } = {
     borderRadius: '12px',
     padding: '14px 16px',
     border: `1px solid ${theme.border}`,
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '12px',
     transition: 'opacity 0.8s ease-out, transform 0.8s ease-out',
   },
   cardCovered: {
@@ -606,36 +586,24 @@ const styles: { [key: string]: React.CSSProperties } = {
     opacity: 0,
     transform: 'translateX(40px)',
   },
-  cardRow1: {
+  cardInner: {
     display: 'flex',
     alignItems: 'center',
     gap: '16px',
   },
-  cardRow2: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    paddingTop: '4px',
-    borderTop: `1px solid ${theme.border}`,
-  },
   cardLeft: {
     flex: '0 0 auto',
-    minWidth: '220px',
+    minWidth: '200px',
   },
   notesMid: {
     flex: '1 1 auto',
     fontSize: '13px',
     color: theme.textMuted,
     fontStyle: 'italic',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
+    lineHeight: 1.5,
   },
   cardRight: {
     flex: '0 0 auto',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
     marginLeft: 'auto',
   },
   dateText: {

@@ -21,8 +21,6 @@ export default function AdminPanel() {
 
   return (
     <div>
-      <h2 style={styles.pageTitle}>Admin Panel</h2>
-      
       <div style={styles.segmentedControl}>
         <NavLink to="/dashboard/admin" end className={({ isActive }) => `admin-tab${isActive ? ' admin-tab-active' : ''}`}>Users</NavLink>
         <NavLink to="/dashboard/admin/series" className={({ isActive }) => `admin-tab${isActive ? ' admin-tab-active' : ''}`}>Event Series</NavLink>
@@ -166,13 +164,13 @@ function UserManagement() {
             </tr>
           </thead>
           <tbody>
-            {users.map(user => {
+            {users.map((user, idx) => {
               const key = user.principal.toText();
               const isActive = 'Active' in user.status;
               const isAdminRole = 'Admin' in user.role;
               const isPending = isPlaceholderPrincipal(user.principal);
               return (
-                <tr key={key} style={!isActive ? styles.disabledRow : {}}>
+                <tr key={key} style={{ ...(idx % 2 === 1 ? styles.zebraRow : {}), ...(!isActive ? styles.disabledRow : {}) }}>
                   <td style={styles.td}>
                     <div style={styles.userName}>{user.name}</div>
                     {isPending ? (
@@ -202,26 +200,34 @@ function UserManagement() {
                   </td>
                   <td style={styles.td}>
                     <div style={styles.actionGroup}>
-                      <button style={styles.actionBtn} onClick={() => setEditingUser(user)} title="Edit">
-                        Edit
+                      <button style={styles.iconBtn} onClick={() => setEditingUser(user)} title="Edit" aria-label={`Edit ${user.name}`}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                       </button>
                       {isPending ? (
-                        <button style={styles.linkBtn} onClick={() => setLinkingUser(user)}>
-                          Link
+                        <button style={styles.iconBtnAccent} onClick={() => setLinkingUser(user)} title="Link Identity" aria-label={`Link identity for ${user.name}`}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>
                         </button>
                       ) : (
-                        <button style={styles.actionBtn} onClick={() => handleToggleStatus(user)} disabled={actionLoading === key}>
-                          {actionLoading === key ? '...' : (isActive ? 'Disable' : 'Enable')}
+                        <button style={styles.iconBtn} onClick={() => handleToggleStatus(user)} disabled={actionLoading === key} title={isActive ? 'Disable' : 'Enable'} aria-label={`${isActive ? 'Disable' : 'Enable'} ${user.name}`}>
+                          {actionLoading === key ? <span style={{ fontSize: '12px' }}>...</span> : (
+                            isActive ? (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="4.93" y1="4.93" x2="19.07" y2="19.07" /></svg>
+                            ) : (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                            )
+                          )}
                         </button>
                       )}
                       <button 
-                        style={styles.deleteBtn} 
+                        style={styles.iconBtnDanger} 
                         onClick={() => handleDeleteUser(user)} 
                         disabled={actionLoading === key + '-delete'}
                         title="Delete"
-                        aria-label={`Delete user ${user.name}`}
+                        aria-label={`Delete ${user.name}`}
                       >
-                        {actionLoading === key + '-delete' ? '...' : '×'}
+                        {actionLoading === key + '-delete' ? <span style={{ fontSize: '12px' }}>...</span> : (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
+                        )}
                       </button>
                     </div>
                   </td>
@@ -454,6 +460,19 @@ function EditUserModal({ user, actor, triggerSessionExpired, onSuccess, onCancel
   return (
     <Modal open={true} onClose={onCancel} title="Edit User">
         {error && <div style={styles.formError}>{error}</div>}
+        
+        {(() => {
+          const bytes = user.principal.toUint8Array();
+          const isPlaceholder = bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFF;
+          return !isPlaceholder;
+        })() && (
+          <div style={styles.formRow}>
+            <label style={styles.label}>Principal</label>
+            <div style={styles.lockedField}>
+              <code style={styles.lockedFieldText}>{user.principal.toText()}</code>
+            </div>
+          </div>
+        )}
         
         <form onSubmit={handleSubmit}>
           <div style={styles.formRow}>
@@ -1155,7 +1174,13 @@ const styles: { [key: string]: React.CSSProperties } = {
   userBadge: { background: 'rgba(99, 102, 241, 0.15)', color: theme.accent, padding: '3px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500 },
   activeBadge: { background: 'rgba(52, 211, 153, 0.15)', color: '#34D399', padding: '3px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500 },
   disabledBadge: { background: 'rgba(248, 113, 113, 0.15)', color: '#F87171', padding: '3px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500 },
-  actionBtn: { padding: '6px 12px', background: 'transparent', color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '6px', cursor: 'pointer', fontSize: '13px', transition: 'all 150ms ease-out' },
+  actionBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '30px', height: '30px', background: 'transparent', color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '6px', cursor: 'pointer', transition: 'all 150ms ease-out' },
+  iconBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '30px', height: '30px', background: 'transparent', color: theme.textMuted, border: `1px solid ${theme.border}`, borderRadius: '6px', cursor: 'pointer', transition: 'all 150ms ease-out' },
+  iconBtnAccent: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '30px', height: '30px', background: 'rgba(99, 102, 241, 0.15)', color: theme.accent, border: `1px solid rgba(99, 102, 241, 0.3)`, borderRadius: '6px', cursor: 'pointer', transition: 'all 150ms ease-out' },
+  iconBtnDanger: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '30px', height: '30px', background: 'transparent', color: '#F87171', border: `1px solid rgba(248, 113, 113, 0.3)`, borderRadius: '6px', cursor: 'pointer', transition: 'all 150ms ease-out' },
+  zebraRow: { background: theme.surfaceElevated },
+  lockedField: { padding: '8px 12px', background: theme.bg, borderRadius: '6px', border: `1px solid ${theme.border}`, display: 'flex', alignItems: 'center', gap: '8px' },
+  lockedFieldText: { fontSize: '12px', color: theme.textMuted, fontFamily: 'monospace', wordBreak: 'break-all' as const, lineHeight: 1.4, userSelect: 'all' as const },
   form: { background: theme.surfaceElevated, borderRadius: '12px', padding: '20px', marginBottom: '24px', border: `1px solid ${theme.border}` },
   formTitle: { marginTop: 0, marginBottom: '16px', fontSize: '16px', color: theme.textPrimary, fontWeight: 600 },
   formError: { background: 'rgba(248, 113, 113, 0.1)', color: '#F87171', padding: '10px 12px', borderRadius: '8px', marginBottom: '16px', fontSize: '14px', border: '1px solid rgba(248, 113, 113, 0.2)' },
@@ -1181,8 +1206,6 @@ const styles: { [key: string]: React.CSSProperties } = {
   seriesMeta: { fontSize: '13px', color: theme.textSecondary, lineHeight: 1.5 },
   seriesNotes: { fontSize: '13px', color: theme.textMuted, marginTop: '8px', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const },
   seriesActions: { display: 'flex', gap: '8px', flexShrink: 0, marginLeft: '16px' },
-  iconBtn: { padding: '6px 12px', background: 'transparent', color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '6px', cursor: 'pointer', fontSize: '13px', transition: 'all 150ms ease-out' },
-  iconBtnDanger: { padding: '6px 12px', background: 'transparent', color: theme.textMuted, border: `1px solid ${theme.border}`, borderRadius: '6px', cursor: 'pointer', fontSize: '13px', transition: 'all 150ms ease-out' },
   settingsForm: { maxWidth: '600px' },
   settingRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 0', borderBottom: `1px solid ${theme.border}` },
   settingInfo: { flex: 1 },
@@ -1212,7 +1235,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   pendingText: { fontSize: '11px', color: '#FBBF24', fontStyle: 'italic' },
   pendingBadge: { background: 'rgba(251, 191, 36, 0.15)', color: '#FBBF24', padding: '3px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500 },
   emptyField: { color: theme.textMuted },
-  linkBtn: { padding: '6px 12px', background: theme.accent, color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 500, transition: 'background 150ms ease-out' },
+  linkBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '30px', height: '30px', background: 'rgba(99, 102, 241, 0.15)', color: theme.accent, border: `1px solid rgba(99, 102, 241, 0.3)`, borderRadius: '6px', cursor: 'pointer', transition: 'all 150ms ease-out' },
   optionalLabel: { color: theme.textMuted, fontWeight: 400, fontSize: '12px' },
   fieldHint: { fontSize: '12px', color: theme.textMuted, marginTop: '6px' },
   // Modal styles
@@ -1221,8 +1244,8 @@ const styles: { [key: string]: React.CSSProperties } = {
   modalTitle: { marginTop: 0, marginBottom: '8px', fontSize: '18px', color: theme.textPrimary, fontWeight: 600 },
   modalDescription: { fontSize: '14px', color: theme.textMuted, marginBottom: '20px', lineHeight: 1.5 },
   // Action group styles
-  actionGroup: { display: 'flex', gap: '6px', alignItems: 'center' },
-  deleteBtn: { padding: '6px 10px', background: 'transparent', color: '#F87171', border: '1px solid rgba(248, 113, 113, 0.3)', borderRadius: '6px', cursor: 'pointer', fontSize: '16px', fontWeight: 600, lineHeight: 1, transition: 'all 150ms ease-out' },
+  actionGroup: { display: 'flex', gap: '4px', alignItems: 'center' },
+  deleteBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '30px', height: '30px', background: 'transparent', color: '#F87171', border: '1px solid rgba(248, 113, 113, 0.3)', borderRadius: '6px', cursor: 'pointer', transition: 'all 150ms ease-out' },
   // System info
   systemInfo: { background: theme.surfaceElevated, borderRadius: '10px', padding: '4px 0', border: `1px solid ${theme.border}` },
   systemRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderBottom: `1px solid ${theme.border}` },
