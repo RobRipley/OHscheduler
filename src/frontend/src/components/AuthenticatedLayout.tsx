@@ -1,8 +1,6 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
 import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useBackend } from '../hooks/useBackend';
-import { useTimezone, TIMEZONE_LIST, getTimezoneAbbrev } from '../hooks/useTimezone';
 import Calendar from './Calendar';
 import CoverageQueue from './CoverageQueue';
 import AdminPanel from './AdminPanel';
@@ -13,25 +11,7 @@ import { theme } from '../theme';
 export default function AuthenticatedLayout() {
   const { user, isAdmin, logout, principal, login, isSessionExpired: authSessionExpired, clearExpiredSession } = useAuth();
   const { sessionExpired: backendSessionExpired } = useBackend();
-  const { timezone, setTimezone, abbrev } = useTimezone();
   const navigate = useNavigate();
-  
-  const [showTzSelector, setShowTzSelector] = useState(false);
-  const [tzSearch, setTzSearch] = useState('');
-  const tzSelectorRef = useRef<HTMLDivElement>(null);
-  const tzSearchRef = useRef<HTMLInputElement>(null);
-  
-  // Filtered timezones based on search
-  const filteredTimezones = useMemo(() => {
-    const search = tzSearch.toLowerCase().trim();
-    if (!search) return TIMEZONE_LIST;
-    return TIMEZONE_LIST.filter(t => {
-      const labelLower = t.label.toLowerCase();
-      const tzLower = t.tz.toLowerCase().replace(/_/g, ' ');
-      const aliasMatch = t.aliases.some(a => a.includes(search));
-      return labelLower.includes(search) || tzLower.includes(search) || aliasMatch;
-    });
-  }, [tzSearch]);
   
   // Session is expired if either auth or backend detects it
   const sessionExpired = authSessionExpired || backendSessionExpired;
@@ -47,36 +27,6 @@ export default function AuthenticatedLayout() {
     // Attempt to log in again
     await login();
   };
-
-  const handleTimezoneChange = (tz: string) => {
-    setTimezone(tz);
-    setShowTzSelector(false);
-    setTzSearch('');
-  };
-
-  // Close timezone dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (tzSelectorRef.current && !tzSelectorRef.current.contains(e.target as Node)) {
-        setShowTzSelector(false);
-        setTzSearch('');
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Close timezone dropdown on Escape
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && showTzSelector) {
-        setShowTzSelector(false);
-        setTzSearch('');
-      }
-    };
-    document.addEventListener('keydown', handleEsc);
-    return () => document.removeEventListener('keydown', handleEsc);
-  }, [showTzSelector]);
 
   return (
     <div style={styles.container}>
@@ -137,53 +87,6 @@ export default function AuthenticatedLayout() {
             <NotificationBell />
             
             <div style={styles.divider} />
-            
-            {/* Timezone Selector */}
-            <div style={styles.tzSelectorWrapper} ref={tzSelectorRef}>
-              <button 
-                style={styles.tzButton}
-                onClick={() => setShowTzSelector(!showTzSelector)}
-                title={`Display timezone: ${timezone}`}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6 }}>
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="12 6 12 12 16 14" />
-                </svg>
-                {abbrev}
-              </button>
-              {showTzSelector && (
-                <div style={styles.tzDropdown}>
-                  <div style={styles.tzDropdownHeader}>Display Timezone</div>
-                  <input
-                    ref={tzSearchRef}
-                    type="text"
-                    placeholder="Search timezones..."
-                    value={tzSearch}
-                    onChange={(e) => setTzSearch(e.target.value)}
-                    style={styles.tzSearchInput}
-                    autoFocus
-                  />
-                  <div style={styles.tzList}>
-                    {filteredTimezones.map(t => (
-                      <button
-                        key={t.tz}
-                        style={{
-                          ...styles.tzOption,
-                          ...(t.tz === timezone ? styles.tzOptionActive : {}),
-                        }}
-                        onClick={() => handleTimezoneChange(t.tz)}
-                      >
-                        <span>{t.label}</span>
-                        <span style={styles.tzAbbrev}>{getTimezoneAbbrev(t.tz)}</span>
-                      </button>
-                    ))}
-                    {filteredTimezones.length === 0 && (
-                      <div style={styles.tzNoResults}>No timezones found</div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
             
             <div style={styles.userGroup}>
               <Avatar name={user?.name || 'U'} size={28} />
@@ -317,90 +220,6 @@ const styles: { [key: string]: React.CSSProperties } = {
     height: '24px',
     background: theme.border,
     margin: '0 4px',
-  },
-  
-  // Timezone selector
-  tzSelectorWrapper: {
-    position: 'relative',
-  },
-  tzButton: {
-    padding: '6px 8px',
-    background: 'transparent',
-    color: theme.textMuted,
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '12px',
-    fontWeight: 500,
-    display: 'flex',
-    alignItems: 'center',
-    gap: '5px',
-    transition: 'color 150ms ease-out',
-  },
-  tzDropdown: {
-    position: 'absolute',
-    top: '100%',
-    right: 0,
-    marginTop: '6px',
-    background: theme.surfaceElevated,
-    border: `1px solid ${theme.border}`,
-    borderRadius: '8px',
-    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
-    zIndex: 200,
-    minWidth: '260px',
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  tzDropdownHeader: {
-    padding: '10px 12px 8px',
-    fontSize: '11px',
-    fontWeight: 600,
-    color: theme.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-    borderBottom: `1px solid ${theme.border}`,
-  },
-  tzSearchInput: {
-    margin: '8px',
-    padding: '6px 10px',
-    background: theme.inputSurface,
-    color: theme.textPrimary,
-    border: `1px solid ${theme.borderInput}`,
-    borderRadius: '6px',
-    fontSize: '13px',
-    outline: 'none',
-  },
-  tzList: {
-    maxHeight: '280px',
-    overflowY: 'auto',
-  },
-  tzNoResults: {
-    padding: '12px',
-    textAlign: 'center',
-    fontSize: '13px',
-    color: theme.textMuted,
-  },
-  tzOption: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
-    padding: '10px 12px',
-    background: 'transparent',
-    border: 'none',
-    color: theme.textSecondary,
-    fontSize: '13px',
-    cursor: 'pointer',
-    textAlign: 'left',
-    transition: 'background 100ms ease-out',
-  },
-  tzOptionActive: {
-    background: theme.accentFocus,
-    color: theme.textPrimary,
-  },
-  tzAbbrev: {
-    color: theme.textMuted,
-    fontSize: '11px',
   },
   
   userName: {
