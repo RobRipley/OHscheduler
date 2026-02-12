@@ -326,3 +326,29 @@ pub fn list_unclaimed_events() -> Vec<EventInstance> {
         .filter(|e| e.host_principal.is_none())
         .collect()
 }
+
+
+/// Get the start/end nanos and label for `months_back` months ago.
+/// months_back=0 means current month.
+pub fn month_window(now: u64, months_back: u8) -> (u64, u64, String) {
+    let (mut y, mut m, _) = nanos_to_ymd(now);
+    
+    for _ in 0..months_back {
+        if m == 1 {
+            m = 12;
+            y -= 1;
+        } else {
+            m -= 1;
+        }
+    }
+    
+    let start = ymd_to_nanos(y, m, 1);
+    
+    let (ny, nm) = if m == 12 { (y + 1, 1) } else { (y, m + 1) };
+    let end = ymd_to_nanos(ny, nm, 1);
+    
+    let month_names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    let label = format!("{} {}", month_names[(m - 1) as usize], y);
+    
+    (start, end, label)
+}

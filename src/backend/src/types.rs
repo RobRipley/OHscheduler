@@ -182,6 +182,9 @@ pub struct GlobalSettings {
     pub forward_window_months: u8,
     pub claims_paused: bool,
     pub default_event_duration_minutes: u32,
+    pub org_name: Option<String>,
+    pub org_tagline: Option<String>,
+    pub org_logo_url: Option<String>,
 }
 
 impl Default for GlobalSettings {
@@ -190,6 +193,9 @@ impl Default for GlobalSettings {
             forward_window_months: 2,
             claims_paused: false,
             default_event_duration_minutes: 60,
+            org_name: None,
+            org_tagline: None,
+            org_logo_url: None,
         }
     }
 }
@@ -256,6 +262,15 @@ pub struct UpdateInstanceInput {
     pub notes: Option<String>,
 }
 
+#[derive(CandidType, Deserialize, Clone, Debug)]
+pub struct CoverageStats {
+    pub period_label: String,
+    pub total_sessions: u32,
+    pub assigned: u32,
+    pub unassigned: u32,
+    pub coverage_pct: f64,
+}
+
 /// For API responses, a simplified event view
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub struct PublicEventView {
@@ -291,7 +306,7 @@ const MAX_SERIES_SIZE: u32 = 1024;
 const MAX_INSTANCE_SIZE: u32 = 1024;
 const MAX_OVERRIDE_SIZE: u32 = 512;
 const MAX_NOTIFICATION_SIZE: u32 = 4096;
-const MAX_SETTINGS_SIZE: u32 = 64;
+const MAX_SETTINGS_SIZE: u32 = 512;
 
 impl Storable for User {
     fn to_bytes(&self) -> Cow<[u8]> {
@@ -445,7 +460,26 @@ impl Storable for GlobalSettings {
     }
 
     fn from_bytes(bytes: Cow<[u8]>) -> Self {
-        Decode!(bytes.as_ref(), Self).unwrap()
+        match Decode!(bytes.as_ref(), Self) {
+            Ok(s) => s,
+            Err(_) => {
+                #[derive(CandidType, Deserialize)]
+                struct OldGlobalSettings {
+                    forward_window_months: u8,
+                    claims_paused: bool,
+                    default_event_duration_minutes: u32,
+                }
+                let old = Decode!(bytes.as_ref(), OldGlobalSettings).unwrap();
+                GlobalSettings {
+                    forward_window_months: old.forward_window_months,
+                    claims_paused: old.claims_paused,
+                    default_event_duration_minutes: old.default_event_duration_minutes,
+                    org_name: None,
+                    org_tagline: None,
+                    org_logo_url: None,
+                }
+            }
+        }
     }
 
     const BOUND: Bound = Bound::Bounded {

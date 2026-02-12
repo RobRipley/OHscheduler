@@ -20,8 +20,17 @@ const publicIdlFactory = ({ IDL }: { IDL: any }) => {
     'host_name': IDL.Opt(IDL.Text),
     'status': IDL.Variant({ 'Active': IDL.Null, 'Cancelled': IDL.Null }),
   });
+  const GlobalSettings = IDL.Record({
+    'forward_window_months': IDL.Nat8,
+    'claims_paused': IDL.Bool,
+    'default_event_duration_minutes': IDL.Nat32,
+    'org_name': IDL.Opt(IDL.Text),
+    'org_tagline': IDL.Opt(IDL.Text),
+    'org_logo_url': IDL.Opt(IDL.Text),
+  });
   return IDL.Service({
     'list_events_public': IDL.Func([IDL.Nat64, IDL.Nat64], [IDL.Vec(PublicEventView)], ['query']),
+    'get_org_settings': IDL.Func([], [GlobalSettings], ['query']),
   });
 };
 
@@ -40,6 +49,9 @@ export default function PublicCalendar() {
   const [events, setEvents] = useState<PublicEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [orgName, setOrgName] = useState('Office Hours');
+  const [orgTagline, setOrgTagline] = useState('');
+  const [orgLogoUrl, setOrgLogoUrl] = useState('/yieldschool_inc_logo.jpeg');
   const { isAuthenticated, isAuthorized, login } = useAuth();
   const navigate = useNavigate();
 
@@ -123,6 +135,14 @@ export default function PublicCalendar() {
         
         const result = await actor.list_events_public(startNanos, endNanos) as PublicEvent[];
         setEvents(result);
+        
+        // Fetch org settings for branding
+        try {
+          const settings = await actor.get_org_settings() as any;
+          if (settings.org_name?.[0]) setOrgName(settings.org_name[0]);
+          if (settings.org_tagline?.[0]) setOrgTagline(settings.org_tagline[0]);
+          if (settings.org_logo_url?.[0]) setOrgLogoUrl(settings.org_logo_url[0]);
+        } catch { /* keep defaults */ }
       } catch (err) {
         console.error('Failed to fetch events:', err);
       } finally {
@@ -203,10 +223,10 @@ export default function PublicCalendar() {
       <main style={styles.main}>
         <div style={styles.headerRow}>
           <div style={styles.titleGroup}>
-            <img src="/yieldschool_inc_logo.jpeg" alt="Yieldschool" style={styles.logo} />
+            <img src={orgLogoUrl} alt={orgName} style={styles.logo} />
             <div style={styles.titleText}>
-              <span style={styles.title}>Office Hours</span>
-              <span style={styles.subtitle}>Yieldschool</span>
+              <span style={styles.title}>{orgName}</span>
+              {orgTagline && <span style={styles.subtitle}>{orgTagline}</span>}
             </div>
           </div>
           <div style={styles.headerControls}>

@@ -429,6 +429,41 @@ fn get_global_settings() -> ApiResult<GlobalSettings> {
     Ok(storage::get_settings())
 }
 
+/// Get org settings for public calendar (no auth required)
+#[query]
+fn get_org_settings() -> GlobalSettings {
+    storage::get_settings()
+}
+
+/// Get coverage history for past N months (admin only)
+#[query]
+fn get_coverage_history(months_back: u8) -> ApiResult<Vec<CoverageStats>> {
+    auth::require_admin()?;
+    
+    let now = ic_cdk::api::time();
+    let mut stats = Vec::new();
+    
+    for i in 0..months_back {
+        let (window_start, window_end, label) = recurrence::month_window(now, i);
+        let events = recurrence::materialize_events(window_start, window_end);
+        let total = events.len() as u32;
+        let assigned = events.iter().filter(|e| e.host_principal.is_some()).count() as u32;
+        let unassigned = total - assigned;
+        let coverage_pct = if total > 0 { (assigned as f64 / total as f64) * 100.0 } else { 0.0 };
+        
+        stats.push(CoverageStats {
+            period_label: label,
+            total_sessions: total,
+            assigned,
+            unassigned,
+            coverage_pct,
+        });
+    }
+    
+    stats.reverse(); // oldest first
+    Ok(stats)
+}
+
 /// Toggle pause/resume on a series (admin only)
 #[update]
 fn toggle_series_pause(series_id: Vec<u8>) -> ApiResult<EventSeries> {

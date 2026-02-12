@@ -81,6 +81,17 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'forward_window_months': IDL.Nat8,
     'claims_paused': IDL.Bool,
     'default_event_duration_minutes': IDL.Nat32,
+    'org_name': IDL.Opt(IDL.Text),
+    'org_tagline': IDL.Opt(IDL.Text),
+    'org_logo_url': IDL.Opt(IDL.Text),
+  });
+
+  const CoverageStats = IDL.Record({
+    'period_label': IDL.Text,
+    'total_sessions': IDL.Nat32,
+    'assigned': IDL.Nat32,
+    'unassigned': IDL.Nat32,
+    'coverage_pct': IDL.Float64,
   });
 
   const CreateEventInput = IDL.Record({
@@ -131,6 +142,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
   const Result_Vec_EventSeries = IDL.Variant({ 'Ok': IDL.Vec(EventSeries), 'Err': ApiError });
   const Result_GlobalSettings = IDL.Variant({ 'Ok': GlobalSettings, 'Err': ApiError });
   const Result_String = IDL.Variant({ 'Ok': IDL.Text, 'Err': ApiError });
+  const Result_Vec_CoverageStats = IDL.Variant({ 'Ok': IDL.Vec(CoverageStats), 'Err': ApiError });
 
   return IDL.Service({
     // Auth / User
@@ -179,6 +191,8 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     // Admin - System
     'update_global_settings': IDL.Func([GlobalSettings], [Result_Unit], []),
     'get_global_settings': IDL.Func([], [Result_GlobalSettings], ['query']),
+    'get_org_settings': IDL.Func([], [GlobalSettings], ['query']),
+    'get_coverage_history': IDL.Func([IDL.Nat8], [Result_Vec_CoverageStats], ['query']),
 
     // ICS
     'get_event_ics': IDL.Func([IDL.Vec(IDL.Nat8)], [Result_String], ['query']),
@@ -250,6 +264,17 @@ export interface GlobalSettings {
   forward_window_months: number;
   claims_paused: boolean;
   default_event_duration_minutes: number;
+  org_name: string[];
+  org_tagline: string[];
+  org_logo_url: string[];
+}
+
+export interface CoverageStats {
+  period_label: string;
+  total_sessions: number;
+  assigned: number;
+  unassigned: number;
+  coverage_pct: number;
 }
 
 export interface CreateSeriesInput {

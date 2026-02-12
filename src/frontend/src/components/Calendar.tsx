@@ -20,7 +20,7 @@ export default function Calendar() {
   const [error, setError] = useState<string | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [users, setUsers] = useState<Map<string, User>>(new Map());
-  const [viewMode, setViewMode] = useState<'week' | 'month'>('month');
+  const [viewMode, setViewMode] = useState<'week' | 'month' | 'agenda'>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -233,6 +233,7 @@ export default function Calendar() {
           <button style={styles.createBtn} onClick={() => setShowCreateModal(true)}>+ New Event</button>
           <div style={styles.timezoneNote}>{abbrev}</div>
           <div style={styles.viewToggle}>
+            <button style={viewMode === 'agenda' ? styles.viewBtnActive : styles.viewBtn} onClick={() => setViewMode('agenda')}>Agenda</button>
             <button style={viewMode === 'week' ? styles.viewBtnActive : styles.viewBtn} onClick={() => setViewMode('week')}>Week</button>
             <button style={viewMode === 'month' ? styles.viewBtnActive : styles.viewBtn} onClick={() => setViewMode('month')}>Month</button>
           </div>
@@ -302,7 +303,7 @@ export default function Calendar() {
                               {formatTimeInTz(event.start_utc)}
                             </div>
                             <div style={isNoHost ? styles.monthEventHostNoHost : styles.monthEventHost}>
-                              {hostName}
+                              {isNoHost ? '+ Assign host' : hostName}
                             </div>
                           </div>
                         );
@@ -317,7 +318,7 @@ export default function Calendar() {
             </div>
           ))}
         </div>
-      ) : (
+      ) : viewMode === 'week' ? (
         <div style={styles.weekCalendar}>
           {calendarGrid[0].map(date => {
             const dateKey = date.toISOString().split('T')[0];
@@ -353,7 +354,7 @@ export default function Calendar() {
                           {formatTimeInTz(event.start_utc)}
                         </div>
                         <div style={styles.eventTitle}>{event.title}</div>
-                        <div style={isNoHost ? styles.eventHostNoHost : styles.eventHost}>{getHostName(event.host_principal)}</div>
+                        <div style={isNoHost ? styles.eventHostNoHost : styles.eventHost}>{isNoHost ? '+ Assign host' : getHostName(event.host_principal)}</div>
                       </div>
                       );
                     })
@@ -362,6 +363,61 @@ export default function Calendar() {
               </div>
             );
           })}
+        </div>
+      ) : (
+        /* Agenda view */
+        <div style={styles.agendaContainer}>
+          {(() => {
+            const allEvents = events
+              .filter(e => 'Active' in e.status)
+              .sort((a, b) => (a.start_utc < b.start_utc ? -1 : 1));
+            if (allEvents.length === 0) return <div style={styles.agendaEmpty}>No events this month</div>;
+            let lastDate = '';
+            return allEvents.map((event, idx) => {
+              const eventDate = nanosToDate(event.start_utc);
+              const dateStr = eventDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: timezone });
+              const showDate = dateStr !== lastDate;
+              lastDate = dateStr;
+              const isNoHost = event.host_principal.length === 0;
+              const hostName = getHostName(event.host_principal);
+              const color = isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title);
+              const isPast = eventDate < new Date();
+              return (
+                <div key={bytesToHex(event.instance_id as number[])}>
+                  {showDate && (
+                    <div style={styles.agendaDateHeader}>
+                      <div style={styles.agendaDateDot} />
+                      <span>{dateStr}</span>
+                    </div>
+                  )}
+                  <div
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '16px', padding: '14px 16px',
+                      marginLeft: '18px', borderLeft: `3px solid ${color.border}`,
+                      background: theme.surface, borderRadius: '8px', marginBottom: '6px',
+                      cursor: 'pointer', transition: 'filter 0.15s, transform 0.15s',
+                      border: `1px solid ${theme.border}`, borderLeftWidth: '3px', borderLeftStyle: 'solid', borderLeftColor: color.border,
+                      opacity: isPast ? 0.5 : 1,
+                    }}
+                    className="event-card-hover"
+                    onClick={() => setSelectedEvent(event)}
+                  >
+                    <div style={styles.agendaTime}>
+                      <div style={styles.agendaTimeStart}>{formatTimeInTz(event.start_utc)}</div>
+                      <div style={styles.agendaTimeEnd}>{formatTimeInTz(event.end_utc)}</div>
+                    </div>
+                    <div style={styles.agendaInfo}>
+                      <div style={styles.agendaTitle}>{event.title}</div>
+                      <div style={isNoHost ? styles.agendaHostNoHost : styles.agendaHost}>{isNoHost ? '+ Assign host' : hostName}</div>
+                    </div>
+                    {event.link && event.link.length > 0 && (
+                      <span style={{ fontSize: '12px', opacity: 0.5 }} title="Has meeting link">🔗</span>
+                    )}
+                  </div>
+                </div>
+              );
+            });
+          })()}
         </div>
       )}
 
@@ -756,4 +812,17 @@ const modalStyles: { [key: string]: React.CSSProperties } = {
   userSelect: { flex: 1, padding: '12px 14px', background: theme.inputSurface, color: theme.textPrimary, border: `1px solid ${theme.borderInput}`, borderRadius: '8px', fontSize: '14px', cursor: 'pointer', outline: 'none' },
   primaryBtn: { padding: '12px 20px', background: theme.accent, color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500, transition: 'background 150ms ease-out' },
   secondaryBtn: { padding: '12px 20px', background: 'transparent', color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500, transition: 'all 150ms ease-out' },
+  // Agenda view
+  agendaContainer: { maxWidth: '680px', margin: '0 auto' } as React.CSSProperties,
+  agendaEmpty: { padding: '48px 16px', textAlign: 'center', color: theme.textMuted, fontSize: '14px' } as React.CSSProperties,
+  agendaDateHeader: { display: 'flex', alignItems: 'center', gap: '10px', padding: '20px 0 8px', fontSize: '14px', fontWeight: 700, color: theme.textPrimary } as React.CSSProperties,
+  agendaDateDot: { width: '8px', height: '8px', borderRadius: '50%', background: theme.accent, flexShrink: 0 } as React.CSSProperties,
+  agendaCard: { display: 'flex', alignItems: 'center', gap: '16px', padding: '14px 16px', marginLeft: '18px', borderLeft: '3px solid transparent', background: theme.surface, borderRadius: '8px', marginBottom: '6px', cursor: 'pointer', transition: 'filter 0.15s, transform 0.15s', border: `1px solid ${theme.border}` } as React.CSSProperties,
+  agendaTime: { minWidth: '80px', flexShrink: 0 } as React.CSSProperties,
+  agendaTimeStart: { fontSize: '14px', fontWeight: 600, color: theme.textPrimary } as React.CSSProperties,
+  agendaTimeEnd: { fontSize: '12px', color: theme.textMuted } as React.CSSProperties,
+  agendaInfo: { flex: 1 } as React.CSSProperties,
+  agendaTitle: { fontSize: '15px', fontWeight: 600, color: theme.textPrimary, marginBottom: '2px' } as React.CSSProperties,
+  agendaHost: { fontSize: '13px', color: theme.accent } as React.CSSProperties,
+  agendaHostNoHost: { fontSize: '13px', color: '#F87171' } as React.CSSProperties,
 };
