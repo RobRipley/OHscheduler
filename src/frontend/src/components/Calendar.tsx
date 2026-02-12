@@ -303,7 +303,7 @@ export default function Calendar() {
                               {formatTimeInTz(event.start_utc)}
                             </div>
                             <div style={isNoHost ? styles.monthEventHostNoHost : styles.monthEventHost}>
-                              {hostName}
+                              {isNoHost ? '+ Assign host' : hostName}
                             </div>
                           </div>
                         );
@@ -354,7 +354,7 @@ export default function Calendar() {
                           {formatTimeInTz(event.start_utc)}
                         </div>
                         <div style={styles.eventTitle}>{event.title}</div>
-                        <div style={isNoHost ? styles.eventHostNoHost : styles.eventHost}>{getHostName(event.host_principal)}</div>
+                        <div style={isNoHost ? styles.eventHostNoHost : styles.eventHost}>{isNoHost ? '+ Assign host' : getHostName(event.host_principal)}</div>
                       </div>
                       );
                     })
@@ -408,7 +408,7 @@ export default function Calendar() {
                     </div>
                     <div style={styles.agendaInfo}>
                       <div style={styles.agendaTitle}>{event.title}</div>
-                      <div style={isNoHost ? styles.agendaHostNoHost : styles.agendaHost}>{hostName}</div>
+                      <div style={isNoHost ? styles.agendaHostNoHost : styles.agendaHost}>{isNoHost ? '+ Assign host' : hostName}</div>
                     </div>
                     {event.link && event.link.length > 0 && (
                       <span style={{ fontSize: '12px', opacity: 0.5 }} title="Has meeting link">🔗</span>

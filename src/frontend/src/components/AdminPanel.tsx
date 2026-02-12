@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Routes, Route, NavLink } from 'react-router-dom';
-import { useBackend, User, EventSeries, GlobalSettings, nanosToDate, bytesToHex, dateToNanos, CreateSeriesInput, isSessionExpiredError } from '../hooks/useBackend';
+import { useBackend, User, EventSeries, GlobalSettings, CoverageStats, nanosToDate, bytesToHex, dateToNanos, CreateSeriesInput, isSessionExpiredError } from '../hooks/useBackend';
 import { useAuth } from '../hooks/useAuth';
 import { Principal } from '@dfinity/principal';
 import { useConfirm, Toggle, Modal, Button, SkeletonTable } from './ui';
@@ -909,6 +909,24 @@ function SystemSettings() {
         </div>
         <button style={styles.submitBtn} onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Settings'}</button>
       </div>
+
+      <h3 style={{ ...styles.sectionTitle, marginTop: '32px' }}>Organization</h3>
+      <p style={styles.settingDesc}>Customize your public calendar branding</p>
+      <div style={styles.settingsForm}>
+        <div style={styles.settingRow}>
+          <div style={styles.settingInfo}><div style={styles.settingLabel}>Organization Name</div></div>
+          <div style={{ flex: 1 }}><input type="text" value={settings.org_name?.[0] || ''} onChange={e => setSettings({ ...settings, org_name: e.target.value ? [e.target.value] : [] })} placeholder="e.g. Yieldschool" style={styles.textInput} /></div>
+        </div>
+        <div style={styles.settingRow}>
+          <div style={styles.settingInfo}><div style={styles.settingLabel}>Tagline</div></div>
+          <div style={{ flex: 1 }}><input type="text" value={settings.org_tagline?.[0] || ''} onChange={e => setSettings({ ...settings, org_tagline: e.target.value ? [e.target.value] : [] })} placeholder="e.g. DeFi Education & Office Hours" style={styles.textInput} /></div>
+        </div>
+        <div style={styles.settingRow}>
+          <div style={styles.settingInfo}><div style={styles.settingLabel}>Logo URL</div></div>
+          <div style={{ flex: 1 }}><input type="text" value={settings.org_logo_url?.[0] || ''} onChange={e => setSettings({ ...settings, org_logo_url: e.target.value ? [e.target.value] : [] })} placeholder="https://..." style={styles.textInput} /></div>
+        </div>
+        <button style={styles.submitBtn} onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Organization'}</button>
+      </div>
     </div>
   );
 }
@@ -918,6 +936,7 @@ function Reports() {
   const { actor, loading: actorLoading, triggerSessionExpired } = useBackend();
   const [events, setEvents] = useState<any[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [coverageHistory, setCoverageHistory] = useState<CoverageStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -929,9 +948,14 @@ function Reports() {
         const now = new Date();
         const start = dateToNanos(now);
         const end = dateToNanos(new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000));
-        const [eventsResult, usersResult] = await Promise.all([actor.list_events(start, end), actor.list_users()]);
+        const [eventsResult, usersResult, historyResult] = await Promise.all([
+          actor.list_events(start, end),
+          actor.list_users(),
+          actor.get_coverage_history(6),
+        ]);
         if ('Ok' in eventsResult) setEvents(eventsResult.Ok);
         if ('Ok' in usersResult) setUsers(usersResult.Ok);
+        if ('Ok' in historyResult) setCoverageHistory(historyResult.Ok);
       } catch (err) {
         if (isSessionExpiredError(err)) {
           triggerSessionExpired();
@@ -1013,6 +1037,29 @@ function Reports() {
             </div>
           ))}
         </div>
+      )}
+
+      {/* Historical Coverage */}
+      {coverageHistory.length > 0 && (
+        <>
+          <h4 style={{ ...styles.reportSectionTitle, marginTop: '32px' }}>Coverage History</h4>
+          <p style={styles.reportSubtitle}>Monthly coverage rate (last 6 months)</p>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', height: '160px', marginBottom: '24px' }}>
+            {coverageHistory.map((m, i) => {
+              const rate = m.total_sessions > 0 ? Math.round((m.assigned / m.total_sessions) * 100) : 0;
+              return (
+                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: theme.textPrimary }}>{rate}%</span>
+                  <div style={{ width: '100%', background: theme.surfaceElevated, borderRadius: '6px', height: '120px', position: 'relative', overflow: 'hidden' }}>
+                    <div style={{ position: 'absolute', bottom: 0, width: '100%', height: `${rate}%`, background: rate >= 80 ? theme.accent : rate >= 50 ? '#FBBF24' : '#F87171', borderRadius: '6px', transition: 'height 0.5s ease' }} />
+                  </div>
+                  <span style={{ fontSize: '11px', color: theme.textMuted }}>{m.period_label}</span>
+                  <span style={{ fontSize: '10px', color: theme.textMuted }}>{m.assigned}/{m.total_sessions}</span>
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
 
       <h4 style={{ ...styles.reportSectionTitle, marginTop: '32px' }}>System Info</h4>
