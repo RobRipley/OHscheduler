@@ -231,14 +231,53 @@ export default function PublicCalendar() {
               {orgTagline && <span style={styles.subtitle}>{orgTagline}</span>}
             </div>
           </div>
+          {!loading && nextSession && (
+            <div style={styles.nextSessionHeader} onClick={() => setSelectedEvent(nextSession)}>
+              <div style={styles.nextSessionLabel}>Next Session</div>
+              <div style={styles.nextSessionInfo}>
+                <strong>{nextSession.title}</strong>
+                <span style={styles.nextSessionTime}>
+                  {new Date(Number(nextSession.start_utc / BigInt(1_000_000))).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: timezone })}
+                  {' · '}
+                  {formatTime(nextSession.start_utc)} {abbrev}
+                </span>
+                {nextSession.host_name.length > 0 && (
+                  <span style={styles.nextSessionHost}>with {nextSession.host_name[0]}</span>
+                )}
+              </div>
+              <span style={styles.nextSessionArrow}>→</span>
+            </div>
+          )}
           <div style={styles.headerControls}>
+            <button onClick={handleSignIn} style={styles.loginButton}>
+              {isAuthenticated && isAuthorized ? 'Dashboard' : 'Sign In'}
+            </button>
+          </div>
+        </div>
+
+        <div style={styles.monthNav}>
+          <div style={styles.navLeft}>
+            <button 
+              onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
+              style={styles.navButton}
+            >
+              ‹
+            </button>
+            <button
+              onClick={() => setCurrentMonth(new Date())}
+              style={styles.navButton}
+            >
+              Today
+            </button>
             <div style={styles.tzWrapper} ref={tzRef}>
               <button
-                style={styles.tzButton}
+                style={styles.tzPill}
                 onClick={() => setShowTzSelector(!showTzSelector)}
                 title={`Display timezone: ${timezone}`}
               >
-                {abbrev} ▾
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                {abbrev}
+                <span style={{ fontSize: '10px', opacity: 0.6 }}>▾</span>
               </button>
               {showTzSelector && (
                 <div style={styles.tzDropdown}>
@@ -272,26 +311,6 @@ export default function PublicCalendar() {
                 </div>
               )}
             </div>
-            <button onClick={handleSignIn} style={styles.loginButton}>
-              {isAuthenticated && isAuthorized ? 'Dashboard' : 'Sign In'}
-            </button>
-          </div>
-        </div>
-
-        <div style={styles.monthNav}>
-          <div style={styles.navLeft}>
-            <button 
-              onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
-              style={styles.navButton}
-            >
-              ‹
-            </button>
-            <button
-              onClick={() => setCurrentMonth(new Date())}
-              style={styles.navButton}
-            >
-              Today
-            </button>
           </div>
           <div style={styles.navCenter}>
             <h2 style={styles.monthTitle}>
@@ -318,25 +337,6 @@ export default function PublicCalendar() {
           <SkeletonCalendar />
         ) : (
           <>
-            {/* Next upcoming session banner */}
-            {nextSession && (
-              <div style={styles.nextSessionBanner} onClick={() => setSelectedEvent(nextSession)}>
-                <div style={styles.nextSessionLabel}>Next Session</div>
-                <div style={styles.nextSessionInfo}>
-                  <strong>{nextSession.title}</strong>
-                  <span style={styles.nextSessionTime}>
-                    {new Date(Number(nextSession.start_utc / BigInt(1_000_000))).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: timezone })}
-                    {' · '}
-                    {formatTime(nextSession.start_utc)} {abbrev}
-                  </span>
-                  {nextSession.host_name.length > 0 && (
-                    <span style={styles.nextSessionHost}>with {nextSession.host_name[0]}</span>
-                  )}
-                </div>
-                <span style={styles.nextSessionArrow}>→</span>
-              </div>
-            )}
-
           <div style={styles.calendar} className="public-calendar-grid">
             <div style={styles.weekHeader}>
               {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
@@ -493,9 +493,9 @@ const styles: { [key: string]: React.CSSProperties } = {
   headerControls: { display: 'flex', alignItems: 'center', gap: '12px' },
   loginButton: { padding: '8px 16px', color: '#fff', background: theme.accent, border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500 },
   
-  // Timezone selector
+  // Timezone selector (pill style matching dashboard)
   tzWrapper: { position: 'relative' },
-  tzButton: { padding: '6px 12px', background: theme.surface, color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '6px', cursor: 'pointer', fontSize: '13px' },
+  tzPill: { display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 10px', background: theme.surface, color: theme.textSecondary, border: `1px solid ${theme.border}`, borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 500, whiteSpace: 'nowrap' as const },
   tzDropdown: { position: 'absolute', top: '100%', right: 0, marginTop: '6px', background: theme.surfaceElevated, border: `1px solid ${theme.border}`, borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.4)', zIndex: 200, minWidth: '260px', display: 'flex', flexDirection: 'column' },
   tzDropdownHeader: { padding: '10px 12px 8px', fontSize: '11px', fontWeight: 600, color: theme.textMuted, textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: `1px solid ${theme.border}` },
   tzSearchInput: { margin: '8px', padding: '6px 10px', background: theme.inputSurface, color: theme.textPrimary, border: `1px solid ${theme.borderInput}`, borderRadius: '6px', fontSize: '13px', outline: 'none' },
@@ -540,13 +540,13 @@ const styles: { [key: string]: React.CSSProperties } = {
   monthSummary: { fontSize: '12px', color: theme.textMuted, marginTop: '2px' },
   needsHostSummary: { color: '#F87171' },
 
-  // Next session banner
-  nextSessionBanner: { display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 18px', background: `linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(99, 102, 241, 0.06))`, border: `1px solid rgba(99, 102, 241, 0.25)`, borderRadius: '10px', marginBottom: '16px', cursor: 'pointer', transition: 'border-color 0.15s' },
-  nextSessionLabel: { fontSize: '10px', fontWeight: 700, color: theme.accent, textTransform: 'uppercase' as const, letterSpacing: '0.08em', whiteSpace: 'nowrap' as const, background: 'rgba(99, 102, 241, 0.15)', padding: '4px 8px', borderRadius: '4px' },
-  nextSessionInfo: { flex: 1, display: 'flex', flexWrap: 'wrap' as const, alignItems: 'center', gap: '6px 12px', fontSize: '14px', color: theme.textPrimary },
-  nextSessionTime: { fontSize: '13px', color: theme.textSecondary },
-  nextSessionHost: { fontSize: '13px', color: theme.accent },
-  nextSessionArrow: { fontSize: '18px', color: theme.textMuted },
+  // Next session (header inline)
+  nextSessionHeader: { display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 14px', background: `linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(99, 102, 241, 0.06))`, border: `1px solid rgba(99, 102, 241, 0.25)`, borderRadius: '8px', cursor: 'pointer', transition: 'border-color 0.15s', maxWidth: '500px' },
+  nextSessionLabel: { fontSize: '9px', fontWeight: 700, color: theme.accent, textTransform: 'uppercase' as const, letterSpacing: '0.08em', whiteSpace: 'nowrap' as const, background: 'rgba(99, 102, 241, 0.15)', padding: '3px 6px', borderRadius: '4px' },
+  nextSessionInfo: { flex: 1, display: 'flex', flexWrap: 'wrap' as const, alignItems: 'center', gap: '4px 10px', fontSize: '13px', color: theme.textPrimary },
+  nextSessionTime: { fontSize: '12px', color: theme.textSecondary },
+  nextSessionHost: { fontSize: '12px', color: theme.accent },
+  nextSessionArrow: { fontSize: '16px', color: theme.textMuted },
 
   // Mobile agenda
   agendaList: { background: theme.surface, borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '8px 0', overflow: 'hidden' },
