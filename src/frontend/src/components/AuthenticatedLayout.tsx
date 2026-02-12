@@ -136,6 +136,8 @@ export default function AuthenticatedLayout() {
           <div style={styles.userSection} className="app-user-section">
             <NotificationBell />
             
+            <div style={styles.divider} />
+            
             {/* Timezone Selector */}
             <div style={styles.tzSelectorWrapper} ref={tzSelectorRef}>
               <button 
@@ -143,7 +145,11 @@ export default function AuthenticatedLayout() {
                 onClick={() => setShowTzSelector(!showTzSelector)}
                 title={`Display timezone: ${timezone}`}
               >
-                {abbrev} ▾
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.6 }}>
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+                {abbrev}
               </button>
               {showTzSelector && (
                 <div style={styles.tzDropdown}>
@@ -185,8 +191,12 @@ export default function AuthenticatedLayout() {
                 {user?.name || principal?.toText().slice(0, 8) + '...'}
               </span>
             </div>
-            <button onClick={handleLogout} style={styles.logoutButton}>
-              Sign out
+            <button onClick={handleLogout} style={styles.logoutButton} aria-label="Sign out">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
             </button>
           </div>
         </div>
@@ -300,7 +310,13 @@ const styles: { [key: string]: React.CSSProperties } = {
   userSection: {
     display: 'flex',
     alignItems: 'center',
-    gap: '12px',
+    gap: '8px',
+  },
+  divider: {
+    width: '1px',
+    height: '24px',
+    background: theme.border,
+    margin: '0 4px',
   },
   
   // Timezone selector
@@ -308,17 +324,18 @@ const styles: { [key: string]: React.CSSProperties } = {
     position: 'relative',
   },
   tzButton: {
-    padding: '6px 10px',
-    background: theme.surfaceElevated,
-    color: theme.textSecondary,
-    border: `1px solid ${theme.border}`,
+    padding: '6px 8px',
+    background: 'transparent',
+    color: theme.textMuted,
+    border: 'none',
     borderRadius: '6px',
     cursor: 'pointer',
     fontSize: '12px',
+    fontWeight: 500,
     display: 'flex',
     alignItems: 'center',
-    gap: '4px',
-    transition: 'all 150ms ease-out',
+    gap: '5px',
+    transition: 'color 150ms ease-out',
   },
   tzDropdown: {
     position: 'absolute',
@@ -396,10 +413,13 @@ const styles: { [key: string]: React.CSSProperties } = {
     gap: '8px',
   },
   logoutButton: {
-    padding: '6px 12px',
-    fontSize: '13px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '32px',
+    height: '32px',
     background: 'transparent',
-    color: theme.textSecondary,
+    color: theme.textMuted,
     border: `1px solid ${theme.border}`,
     borderRadius: '6px',
     cursor: 'pointer',
