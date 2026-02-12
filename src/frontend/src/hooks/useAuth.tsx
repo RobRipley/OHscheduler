@@ -272,31 +272,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loginInProgressRef = useRef(false);
 
   const login = useCallback(async () => {
-    // Prevent concurrent login attempts (React strict mode + double-render can cause multiple calls)
+    // Prevent concurrent login attempts
     if (loginInProgressRef.current) {
       console.log('[Auth] Login already in progress, skipping');
       return;
     }
-    
-    // If no authClient, try creating one fresh
-    let client = authClient;
-    if (!client) {
-      console.log('[Auth] No authClient available, creating fresh one');
-      client = await AuthClient.create();
-      setAuthClient(client);
-    }
-    
     loginInProgressRef.current = true;
     
-    // Clear any expired session state before attempting login
-    setIsSessionExpired(false);
-    setIsLoading(true);
-    
-    // Max delegation expiry: 30 days (in nanoseconds)
-    const thirtyDaysInNanoseconds = BigInt(30 * 24 * 60 * 60 * 1000 * 1000 * 1000);
-    
-    console.log('[Auth] Calling authClient.login with provider:', getIdentityProviderUrl());
     try {
+      // If no authClient, create one fresh (don't set state yet to avoid re-render)
+      let client = authClient;
+      if (!client) {
+        console.log('[Auth] No authClient available, creating fresh one');
+        client = await AuthClient.create();
+        setAuthClient(client);
+      }
+      
+      // Clear any expired session state before attempting login
+      setIsSessionExpired(false);
+      setIsLoading(true);
+      
+      // Max delegation expiry: 30 days (in nanoseconds)
+      const thirtyDaysInNanoseconds = BigInt(30 * 24 * 60 * 60 * 1000 * 1000 * 1000);
+      
+      console.log('[Auth] Calling authClient.login with provider:', getIdentityProviderUrl());
       await client.login({
         identityProvider: getIdentityProviderUrl(),
         maxTimeToLive: thirtyDaysInNanoseconds,
@@ -312,12 +311,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setIsLoading(false);
         },
       });
+      console.log('[Auth] authClient.login returned');
     } catch (e) {
       console.error('[Auth] Login exception:', e);
       loginInProgressRef.current = false;
       setIsLoading(false);
     }
-    console.log('[Auth] authClient.login returned');
   }, [authClient, checkAuthorizationAndSetState]);
 
   const logout = useCallback(async () => {
