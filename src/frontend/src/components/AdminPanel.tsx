@@ -847,7 +847,7 @@ function EventSeriesManagement() {
           {series.map(s => {
             const key = bytesToHex(s.series_id as number[]);
             return (
-              <div key={key} style={{ ...styles.seriesCard, ...(s.paused ? { opacity: 0.6 } : {}) }}>
+              <div key={key} style={{ ...styles.seriesCard, borderLeft: `3px solid ${s.color?.[0] || theme.accent}`, ...(s.paused ? { opacity: 0.6 } : {}) }}>
                 <div style={styles.seriesInfo}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div style={styles.seriesTitle}>{s.title}</div>

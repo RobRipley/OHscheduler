@@ -135,6 +135,7 @@ type UpdateSeriesInput = record {
     end_date: opt opt nat64;
     default_duration_minutes: opt nat32;
     color: opt opt text;
+    paused: opt bool;
 };
 
 type ApiError = variant {
