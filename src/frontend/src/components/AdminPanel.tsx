@@ -160,6 +160,7 @@ function UserManagement() {
               <th style={styles.th}>Role</th>
               <th style={styles.th}>Status</th>
               <th style={styles.th}>Hosted</th>
+              <th style={styles.th}>Last Active</th>
               <th style={styles.th}>Actions</th>
             </tr>
           </thead>
@@ -190,6 +191,13 @@ function UserManagement() {
                   </td>
                   <td style={styles.td}>
                     <span style={{ color: theme.textSecondary }}>{user.sessions_hosted_count?.toString() || '0'}</span>
+                  </td>
+                  <td style={styles.td}>
+                    <span style={{ color: theme.textMuted, fontSize: '12px' }}>
+                      {user.last_active && Number(user.last_active) > 0
+                        ? nanosToDate(user.last_active).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                        : '—'}
+                    </span>
                   </td>
                   <td style={styles.td}>
                     <div style={styles.actionGroup}>

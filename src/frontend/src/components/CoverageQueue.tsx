@@ -426,9 +426,7 @@ export default function CoverageQueue() {
                   {event.notes && (
                     <div style={styles.notesMid}>{event.notes}</div>
                   )}
-                  <span style={isCovered ? styles.coveredBadge : styles.needsHostBadge}>
-                    {isCovered ? 'Covered' : 'Needs Host'}
-                  </span>
+                  {isCovered && <span style={styles.coveredBadge}>Covered</span>}
                 </div>
 
                 {/* Row 2: Action row */}
