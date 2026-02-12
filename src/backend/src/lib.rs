@@ -589,35 +589,13 @@ fn get_event_ics(instance_id: Vec<u8>) -> ApiResult<String> {
 // Invite Code System
 // ============================================================================
 
-/// Generate an invite code for a pending user (admin only)
+/// Generate a standalone invite code (admin only).
+/// The code encodes a role. When redeemed, the user provides their own name/email.
 /// Uses raw_rand() for cryptographic randomness — must be an update call.
 #[update]
-async fn generate_invite_code(user_placeholder_principal: Principal) -> ApiResult<InviteCode> {
+async fn generate_invite_code(role: Role) -> ApiResult<InviteCode> {
     let admin = auth::require_admin()?;
-    
-    // Verify user exists
-    let user = storage::get_user(&user_placeholder_principal)
-        .ok_or(ApiError::NotFound)?;
-    
-    // Verify user has a placeholder principal (0xFF 0xFF prefix)
-    let bytes = user_placeholder_principal.as_slice();
-    if bytes.len() < 2 || bytes[0] != 0xFF || bytes[1] != 0xFF {
-        return Err(ApiError::InvalidInput(
-            "User does not have a placeholder principal. Invite codes are only for pending users.".to_string()
-        ));
-    }
-    
-    // Check for existing active (non-redeemed, non-expired) invite for this user
     let now = ic_cdk::api::time();
-    let existing = storage::list_all_invite_codes();
-    for code in &existing {
-        if code.user_placeholder_principal == user_placeholder_principal 
-           && !code.redeemed 
-           && code.expires_at > now {
-            // Return the existing active code
-            return Ok(code.clone());
-        }
-    }
     
     // Generate random bytes via management canister
     let (random_bytes,): (Vec<u8>,) = ic_cdk::api::management_canister::main::raw_rand()
@@ -641,7 +619,7 @@ async fn generate_invite_code(user_placeholder_principal: Principal) -> ApiResul
     
     let invite = InviteCode {
         code: code_chars,
-        user_placeholder_principal,
+        role,
         created_at: now,
         created_by: admin.principal,
         expires_at: now + 7 * 24 * 60 * 60 * 1_000_000_000, // 7 days in nanoseconds
@@ -654,16 +632,25 @@ async fn generate_invite_code(user_placeholder_principal: Principal) -> ApiResul
     Ok(invite)
 }
 
-/// Redeem an invite code — links the caller's II principal to a pre-created user record.
+/// Redeem an invite code — creates a new user with the caller's II principal.
 /// Caller must be authenticated via II but does NOT need to be authorized.
 #[update]
-fn redeem_invite_code(code: String) -> ApiResult<User> {
-    // Must be authenticated (not anonymous) but NOT necessarily authorized
+fn redeem_invite_code(code: String, name: String, email: String) -> ApiResult<User> {
     let caller_principal = auth::require_authenticated()?;
     
     // Check caller isn't already an authorized user
     if storage::user_exists(&caller_principal) {
         return Err(ApiError::Conflict("You are already an authorized user.".to_string()));
+    }
+    
+    // Validate inputs
+    let name = name.trim().to_string();
+    let email = email.trim().to_string();
+    if name.is_empty() {
+        return Err(ApiError::InvalidInput("Name is required.".to_string()));
+    }
+    if email.is_empty() || !email.contains('@') {
+        return Err(ApiError::InvalidInput("A valid email is required.".to_string()));
     }
     
     let code_upper = code.trim().to_uppercase();
@@ -681,16 +668,12 @@ fn redeem_invite_code(code: String) -> ApiResult<User> {
         return Err(ApiError::InvalidInput("This invite code has expired.".to_string()));
     }
     
-    // Get the placeholder user record
-    let old_user = storage::get_user(&invite.user_placeholder_principal)
-        .ok_or(ApiError::InternalError("Associated user record not found.".to_string()))?;
-    
-    // Create new user with caller's real principal, copying all data from placeholder
+    // Create the user with the role from the invite code
     let new_user = User {
         principal: caller_principal,
-        name: old_user.name,
-        email: old_user.email,
-        role: old_user.role,
+        name,
+        email,
+        role: invite.role.clone(),
         status: UserStatus::Active,
         out_of_office: vec![],
         notification_settings: NotificationSettings::default(),
@@ -701,9 +684,6 @@ fn redeem_invite_code(code: String) -> ApiResult<User> {
     };
     
     storage::insert_user(new_user.clone());
-    
-    // Remove the old placeholder user
-    storage::delete_user(&invite.user_placeholder_principal);
     
     // Mark invite as redeemed
     invite.redeemed = true;

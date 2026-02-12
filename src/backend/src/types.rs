@@ -304,7 +304,7 @@ pub type ApiResult<T> = Result<T, ApiError>;
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub struct InviteCode {
     pub code: String,
-    pub user_placeholder_principal: Principal,
+    pub role: Role,
     pub created_at: u64,
     pub created_by: Principal,
     pub expires_at: u64,

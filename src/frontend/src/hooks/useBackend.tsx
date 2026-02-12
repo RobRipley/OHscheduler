@@ -148,7 +148,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
 
   const InviteCode = IDL.Record({
     'code': IDL.Text,
-    'user_placeholder_principal': IDL.Principal,
+    'role': Role,
     'created_at': IDL.Nat64,
     'created_by': IDL.Principal,
     'expires_at': IDL.Nat64,
@@ -214,8 +214,8 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'get_event_ics': IDL.Func([IDL.Vec(IDL.Nat8)], [Result_String], ['query']),
 
     // Invite Codes
-    'generate_invite_code': IDL.Func([IDL.Principal], [Result_InviteCode], []),
-    'redeem_invite_code': IDL.Func([IDL.Text], [Result_User], []),
+    'generate_invite_code': IDL.Func([Role], [Result_InviteCode], []),
+    'redeem_invite_code': IDL.Func([IDL.Text, IDL.Text, IDL.Text], [Result_User], []),
     'list_invite_codes': IDL.Func([], [Result_Vec_InviteCode], ['query']),
   });
 };
@@ -301,7 +301,7 @@ export interface CoverageStats {
 
 export interface InviteCode {
   code: string;
-  user_placeholder_principal: Principal;
+  role: { Admin: null } | { User: null };
   created_at: bigint;
   created_by: Principal;
   expires_at: bigint;

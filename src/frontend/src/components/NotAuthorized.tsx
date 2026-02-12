@@ -6,7 +6,7 @@ import { Button } from './ui';
 import { theme } from '../theme';
 
 // Minimal IDL just for redeem_invite_code
-const redeemIdlFactory = ({ IDL }: { IDL: any }) => {
+  const redeemIdlFactory = ({ IDL }: { IDL: any }) => {
   const Role = IDL.Variant({ 'Admin': IDL.Null, 'User': IDL.Null });
   const UserStatus = IDL.Variant({ 'Active': IDL.Null, 'Disabled': IDL.Null });
   const OOOBlock = IDL.Record({ 'start_utc': IDL.Nat64, 'end_utc': IDL.Nat64 });
@@ -28,7 +28,7 @@ const redeemIdlFactory = ({ IDL }: { IDL: any }) => {
   });
   const Result_User = IDL.Variant({ 'Ok': User, 'Err': ApiError });
   return IDL.Service({
-    'redeem_invite_code': IDL.Func([IDL.Text], [Result_User], []),
+    'redeem_invite_code': IDL.Func([IDL.Text, IDL.Text, IDL.Text], [Result_User], []),
   });
 };
 
@@ -48,6 +48,8 @@ export default function NotAuthorized() {
   // Split code into segments for the segmented input
   const [seg1, setSeg1] = useState('');
   const [seg2, setSeg2] = useState('');
+  const [userName, setUserName] = useState('');
+  const [userEmail, setUserEmail] = useState('');
   
   const principalText = principal?.toText() || 'Unknown';
   
@@ -97,9 +99,10 @@ export default function NotAuthorized() {
   };
 
   const fullCode = seg1.length === 4 && seg2.length === 4 ? `YS-${seg1}-${seg2}` : '';
+  const canRedeem = !!fullCode && userName.trim().length > 0 && userEmail.trim().includes('@');
 
   const handleRedeem = async () => {
-    if (!fullCode) return;
+    if (!canRedeem) return;
     setRedeemLoading(true);
     setRedeemError(null);
     
@@ -115,7 +118,7 @@ export default function NotAuthorized() {
       }
       const actor = Actor.createActor(redeemIdlFactory, { agent, canisterId: BACKEND_CANISTER_ID });
       
-      const result: any = await actor.redeem_invite_code(fullCode);
+      const result: any = await actor.redeem_invite_code(fullCode, userName.trim(), userEmail.trim());
       
       if ('Ok' in result) {
         setRedeemSuccess(true);
@@ -233,12 +236,35 @@ export default function NotAuthorized() {
               {redeemError}
             </div>
           )}
+
+          {fullCode && (
+            <div style={styles.nameEmailGroup}>
+              <input
+                type="text"
+                value={userName}
+                onChange={e => { setUserName(e.target.value); setRedeemError(null); }}
+                placeholder="Your name"
+                style={styles.textInput}
+                spellCheck={false}
+                autoComplete="name"
+              />
+              <input
+                type="email"
+                value={userEmail}
+                onChange={e => { setUserEmail(e.target.value); setRedeemError(null); }}
+                placeholder="Your email"
+                style={styles.textInput}
+                spellCheck={false}
+                autoComplete="email"
+              />
+            </div>
+          )}
           
           <Button
             variant="primary"
             onClick={handleRedeem}
             loading={redeemLoading}
-            disabled={!fullCode}
+            disabled={!canRedeem}
             style={{ width: '100%', padding: '14px', fontSize: '15px', marginTop: '8px' }}
           >
             Activate Account
@@ -380,6 +406,25 @@ const styles: { [key: string]: React.CSSProperties } = {
     background: theme.dangerMuted,
     borderRadius: '8px',
     width: '100%',
+    boxSizing: 'border-box' as const,
+  },
+  nameEmailGroup: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '10px',
+    width: '100%',
+    marginBottom: '8px',
+  },
+  textInput: {
+    width: '100%',
+    padding: '12px 14px',
+    fontSize: '14px',
+    background: theme.inputSurface,
+    border: `1.5px solid ${theme.borderInput}`,
+    borderRadius: '10px',
+    color: theme.textPrimary,
+    outline: 'none',
+    transition: 'border-color 200ms ease, box-shadow 200ms ease',
     boxSizing: 'border-box' as const,
   },
 

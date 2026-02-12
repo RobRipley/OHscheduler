@@ -142,7 +142,7 @@ type ApiError = variant {
 
 type InviteCode = record {
     code: text;
-    user_placeholder_principal: principal;
+    role: Role;
     created_at: nat64;
     created_by: principal;
     expires_at: nat64;
@@ -207,7 +207,7 @@ service : {
     get_event_ics : (blob) -> (Result_String) query;
 
     // Invite Codes
-    generate_invite_code : (principal) -> (Result_InviteCode);
-    redeem_invite_code : (text) -> (Result_User);
+    generate_invite_code : (Role) -> (Result_InviteCode);
+    redeem_invite_code : (text, text, text) -> (Result_User);
     list_invite_codes : () -> (Result_Vec_InviteCode) query;
 }
