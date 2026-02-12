@@ -70,13 +70,17 @@ function UserManagement() {
     if (!actor) return;
     setLoading(true);
     try {
-      const [usersResult, codesResult] = await Promise.all([
-        actor.list_users(),
-        actor.list_invite_codes(),
-      ]);
+      const usersResult = await actor.list_users();
       if ('Ok' in usersResult) setUsers(usersResult.Ok);
       else setError(getErrorMessage(usersResult.Err));
-      if ('Ok' in codesResult) setInviteCodes(codesResult.Ok);
+      
+      // Invite codes fetch is separate — don't let it break user loading
+      try {
+        const codesResult = await actor.list_invite_codes();
+        if ('Ok' in codesResult) setInviteCodes(codesResult.Ok);
+      } catch (codeErr) {
+        console.warn('Failed to load invite codes:', codeErr);
+      }
     } catch (err) {
       if (isSessionExpiredError(err)) {
         triggerSessionExpired();

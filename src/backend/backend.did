@@ -41,6 +41,8 @@ type User = record {
     status: UserStatus;
     out_of_office: vec OOOBlock;
     notification_settings: NotificationSettings;
+    last_active: nat64;
+    sessions_hosted_count: nat32;
     created_at: nat64;
     updated_at: nat64;
 };
