@@ -281,7 +281,6 @@ export default function CoverageQueue() {
   if (actorLoading || loading) {
     return (
       <div style={styles.container}>
-        <p style={styles.subtitle}>Sessions that need a host assigned</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {Array.from({ length: 5 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
@@ -302,13 +301,6 @@ export default function CoverageQueue() {
       )}
 
       {/* Header */}
-      <div style={styles.header}>
-        <p style={styles.subtitle}>Sessions that need a host assigned</p>
-        <button style={styles.refreshBtn} onClick={fetchEvents} disabled={loading}>
-          Refresh
-        </button>
-      </div>
-
       {error && <div style={styles.error}>{error}</div>}
 
       {/* Filters */}
@@ -347,6 +339,9 @@ export default function CoverageQueue() {
               <option value="series">By series</option>
             </select>
           </div>
+          <button style={styles.refreshBtn} onClick={fetchEvents} disabled={loading}>
+            Refresh
+          </button>
         </div>
       )}
 
@@ -533,13 +528,14 @@ const styles: { [key: string]: React.CSSProperties } = {
     color: theme.textMuted,
   },
   refreshBtn: {
-    padding: '8px 16px',
+    padding: '6px 14px',
     background: 'transparent',
     color: theme.textSecondary,
     border: `1px solid ${theme.border}`,
-    borderRadius: '8px',
+    borderRadius: '6px',
     cursor: 'pointer',
-    fontSize: '14px',
+    fontSize: '13px',
+    marginLeft: 'auto',
   },
   error: {
     background: 'rgba(248, 113, 113, 0.1)',
