@@ -6,7 +6,7 @@ import { Principal } from '@dfinity/principal';
 import { Select, Button, SkeletonCard } from './ui';
 import type { SelectOption } from './ui';
 import { theme } from '../theme';
-import { getSeriesColor, NO_HOST_COLOR } from '../utils/seriesColors';
+import { getSeriesColor } from '../utils/seriesColors';
 
 export default function CoverageQueue() {
   const { actor, loading: actorLoading, triggerSessionExpired } = useBackend();
@@ -400,7 +400,7 @@ export default function CoverageQueue() {
               ? users.find(u => u.principal.toText() === selectedHost)?.name 
               : null;
             const isNoHost = event.host_principal.length === 0;
-            const seriesColor = isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title, event.color?.[0]);
+            const seriesColor = getSeriesColor(event.title, event.color?.[0]);
             
             return (
               <div key={eventKey} style={{
