@@ -136,6 +136,7 @@ pub struct EventSeries {
     pub default_duration_minutes: u32,
     pub color: Option<String>,
     pub paused: bool,
+    pub default_host: Option<Principal>,
     pub created_at: u64,
     pub created_by: Principal,
 }
@@ -242,6 +243,7 @@ pub struct CreateSeriesInput {
     pub end_date: Option<u64>,
     pub default_duration_minutes: Option<u32>,
     pub color: Option<String>,
+    pub default_host: Option<Principal>,
 }
 
 
@@ -253,6 +255,7 @@ pub struct UpdateSeriesInput {
     pub default_duration_minutes: Option<u32>,
     pub color: Option<Option<String>>,  // None = don't change, Some(None) = clear, Some(Some(x)) = set to x
     pub paused: Option<bool>,
+    pub default_host: Option<Option<Principal>>,  // None = don't change, Some(None) = clear, Some(Some(p)) = set
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
@@ -364,7 +367,44 @@ impl Storable for EventSeries {
         match Decode!(bytes.as_ref(), Self) {
             Ok(s) => s,
             Err(_) => {
-                // Try decoding as old EventSeries format (without color, paused)
+                // Try decoding as v3 EventSeries (has color+paused but no default_host)
+                #[derive(CandidType, Deserialize)]
+                struct V3EventSeries {
+                    series_id: [u8; 16],
+                    title: String,
+                    notes: String,
+                    link: Option<String>,
+                    frequency: Frequency,
+                    weekday: Weekday,
+                    weekday_ordinal: Option<WeekdayOrdinal>,
+                    start_date: u64,
+                    end_date: Option<u64>,
+                    default_duration_minutes: u32,
+                    color: Option<String>,
+                    paused: bool,
+                    created_at: u64,
+                    created_by: Principal,
+                }
+                if let Ok(v3) = Decode!(bytes.as_ref(), V3EventSeries) {
+                    return EventSeries {
+                        series_id: v3.series_id,
+                        title: v3.title,
+                        notes: v3.notes,
+                        link: v3.link,
+                        frequency: v3.frequency,
+                        weekday: v3.weekday,
+                        weekday_ordinal: v3.weekday_ordinal,
+                        start_date: v3.start_date,
+                        end_date: v3.end_date,
+                        default_duration_minutes: v3.default_duration_minutes,
+                        color: v3.color,
+                        paused: v3.paused,
+                        default_host: None,
+                        created_at: v3.created_at,
+                        created_by: v3.created_by,
+                    };
+                }
+                // Try decoding as v1 EventSeries (no color, no paused, no default_host)
                 #[derive(CandidType, Deserialize)]
                 struct OldEventSeries {
                     series_id: [u8; 16],
@@ -394,6 +434,7 @@ impl Storable for EventSeries {
                     default_duration_minutes: old.default_duration_minutes,
                     color: None,
                     paused: false,
+                    default_host: None,
                     created_at: old.created_at,
                     created_by: old.created_by,
                 }

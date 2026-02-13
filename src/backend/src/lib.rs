@@ -311,6 +311,7 @@ fn create_event_series(input: CreateSeriesInput) -> ApiResult<EventSeries> {
             .unwrap_or(settings.default_event_duration_minutes),
         color: input.color,
         paused: false,
+        default_host: input.default_host,
         created_at: now,
         created_by: admin.principal,
     };
@@ -347,6 +348,9 @@ fn update_event_series(series_id: Vec<u8>, input: UpdateSeriesInput) -> ApiResul
     }
     if let Some(paused) = input.paused {
         series.paused = paused;
+    }
+    if let Some(default_host) = input.default_host {
+        series.default_host = default_host;
     }
     
     storage::insert_series(series.clone());
