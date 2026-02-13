@@ -60,6 +60,7 @@ type EventSeries = record {
     default_duration_minutes: nat32;
     color: opt text;
     paused: bool;
+    default_host: opt principal;
     created_at: nat64;
     created_by: principal;
 };
@@ -102,6 +103,7 @@ type PublicEventView = record {
     instance_id: blob;
     title: text;
     notes: text;
+    link: opt text;
     start_utc: nat64;
     end_utc: nat64;
     host_name: opt text;
@@ -127,6 +129,7 @@ type CreateSeriesInput = record {
     end_date: opt nat64;
     default_duration_minutes: opt nat32;
     color: opt text;
+    default_host: opt principal;
 };
 
 type UpdateSeriesInput = record {
@@ -136,6 +139,7 @@ type UpdateSeriesInput = record {
     default_duration_minutes: opt nat32;
     color: opt opt text;
     paused: opt bool;
+    default_host: opt opt principal;
 };
 
 type ApiError = variant {
@@ -197,6 +201,7 @@ service : {
 
     // Events - Public
     list_events_public : (nat64, nat64) -> (vec PublicEventView) query;
+    get_event_ics_public : (blob) -> (Result_String) query;
 
     // Events - Authenticated
     list_events : (nat64, nat64) -> (Result_Vec_EventInstance) query;

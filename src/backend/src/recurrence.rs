@@ -280,11 +280,13 @@ pub fn materialize_events(window_start: u64, window_end: u64) -> Vec<EventInstan
             let end_utc = ovr.as_ref().and_then(|o| o.end_utc).unwrap_or(occ_start + duration_nanos);
             let notes = ovr.as_ref().and_then(|o| o.notes.clone()).unwrap_or(series.notes.clone());
             
-            // Host: check if explicitly cleared, otherwise use override value
+            // Host: check if explicitly cleared, otherwise use override value, then fall back to series default
             let host_principal = if ovr.as_ref().map(|o| o.host_cleared).unwrap_or(false) {
                 None
             } else {
-                ovr.as_ref().and_then(|o| o.host_principal)
+                ovr.as_ref()
+                    .and_then(|o| o.host_principal)
+                    .or(series.default_host)
             };
             
             results.push(EventInstance {

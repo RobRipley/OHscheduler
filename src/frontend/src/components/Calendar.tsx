@@ -475,6 +475,7 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
   const isHost = event.host_principal.length > 0 && currentUser?.principal?.toText() === event.host_principal[0]?.toText();
   const isNoHost = event.host_principal.length === 0;
   const isCancelled = 'Cancelled' in event.status;
+  const isAdmin = currentUser?.role && 'Admin' in currentUser.role;
 
   // Get list of active users for dropdown
   const activeUsers = Array.from(users.values()).filter(u => 'Active' in u.status);
@@ -626,6 +627,11 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
           {!isCancelled && isHost && (
             <Button variant="secondary" onClick={handleRemoveHost} loading={actionLoading}>
               Remove myself
+            </Button>
+          )}
+          {!isCancelled && !isHost && isAdmin && event.host_principal.length > 0 && (
+            <Button variant="secondary" onClick={handleRemoveHost} loading={actionLoading}>
+              Remove host
             </Button>
           )}
           {!isCancelled && event.host_principal.length > 0 && (

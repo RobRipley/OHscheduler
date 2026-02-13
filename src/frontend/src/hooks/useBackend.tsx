@@ -59,6 +59,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'default_duration_minutes': IDL.Nat32,
     'color': IDL.Opt(IDL.Text),
     'paused': IDL.Bool,
+    'default_host': IDL.Opt(IDL.Principal),
     'created_at': IDL.Nat64,
     'created_by': IDL.Principal,
   });
@@ -115,6 +116,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'end_date': IDL.Opt(IDL.Nat64),
     'default_duration_minutes': IDL.Opt(IDL.Nat32),
     'color': IDL.Opt(IDL.Text),
+    'default_host': IDL.Opt(IDL.Principal),
   });
 
 
@@ -125,6 +127,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'default_duration_minutes': IDL.Opt(IDL.Nat32),
     'color': IDL.Opt(IDL.Opt(IDL.Text)),
     'paused': IDL.Opt(IDL.Bool),
+    'default_host': IDL.Opt(IDL.Opt(IDL.Principal)),
   });
 
   const ApiError = IDL.Variant({
@@ -296,6 +299,7 @@ export interface EventSeries {
   default_duration_minutes: number;
   color: [string] | [];
   paused: boolean;
+  default_host: [Principal] | [];
   created_at: bigint;
   created_by: Principal;
 }
@@ -340,6 +344,7 @@ export interface CreateSeriesInput {
   end_date: [bigint] | [];
   default_duration_minutes: [number] | [];
   color: [string] | [];
+  default_host: [Principal] | [];
 }
 
 

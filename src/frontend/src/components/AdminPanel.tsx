@@ -931,8 +931,17 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
   const [endDate, setEndDate] = useState('');
   const [duration, setDuration] = useState('60');
   const [color, setColor] = useState('');
+  const [defaultHost, setDefaultHost] = useState('');
+  const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!actor) return;
+    actor.list_users().then((result: any) => {
+      if ('Ok' in result) setUsers(result.Ok.filter((u: any) => 'Active' in u.status));
+    }).catch(() => {});
+  }, [actor]);
 
   const derivedWeekday = startDate ? new Date(startDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long' }) : null;
   const weekdayMap: Record<string, string> = { Sunday: 'Sun', Monday: 'Mon', Tuesday: 'Tue', Wednesday: 'Wed', Thursday: 'Thu', Friday: 'Fri', Saturday: 'Sat' };
@@ -980,6 +989,7 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
         end_date: endDate ? [dateToNanos(new Date(endDate + 'T23:59:59'))] : [],
         default_duration_minutes: duration ? [parseInt(duration)] : [],
         color: color ? [color] : [],
+        default_host: defaultHost ? [Principal.fromText(defaultHost)] : [],
       };
       const result = await actor.create_event_series(input);
       if ('Ok' in result) onSuccess();
@@ -1021,6 +1031,7 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
           ))}
         </div>
       </div>
+      <div style={styles.formRow}><label style={styles.label}>Default Host (optional)</label><select value={defaultHost} onChange={e => setDefaultHost(e.target.value)} style={styles.select}><option value="">No default host</option>{users.map((u: any) => <option key={u.principal.toText()} value={u.principal.toText()}>{u.name}</option>)}</select></div>
       {previewDates.length > 0 && (
         <div style={styles.previewSection}>
           <div style={styles.previewTitle}>Preview — next {previewDates.length} occurrence{previewDates.length !== 1 ? 's' : ''}</div>
@@ -1044,8 +1055,17 @@ function EditSeriesForm({ actor, triggerSessionExpired, series, onSuccess, onCan
   const [endDate, setEndDate] = useState(series.end_date.length > 0 ? nanosToDate(series.end_date[0] as bigint).toISOString().split('T')[0] : '');
   const [duration, setDuration] = useState(series.default_duration_minutes.toString());
   const [color, setColor] = useState(series.color?.[0] || '');
+  const [defaultHost, setDefaultHost] = useState(series.default_host?.[0]?.toText() || '');
+  const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!actor) return;
+    actor.list_users().then((result: any) => {
+      if ('Ok' in result) setUsers(result.Ok.filter((u: any) => 'Active' in u.status));
+    }).catch(() => {});
+  }, [actor]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1060,6 +1080,7 @@ function EditSeriesForm({ actor, triggerSessionExpired, series, onSuccess, onCan
         default_duration_minutes: [parseInt(duration)],
         color: color ? [[color]] : [[]],
         paused: [],
+        default_host: defaultHost ? [[Principal.fromText(defaultHost)]] : [[]],
       };
       const result = await actor.update_event_series(series.series_id, updateInput);
       if ('Ok' in result) onSuccess();
@@ -1103,6 +1124,7 @@ function EditSeriesForm({ actor, triggerSessionExpired, series, onSuccess, onCan
           ))}
         </div>
       </div>
+      <div style={styles.formRow}><label style={styles.label}>Default Host</label><select value={defaultHost} onChange={e => setDefaultHost(e.target.value)} style={styles.select}><option value="">No default host</option>{users.map((u: any) => <option key={u.principal.toText()} value={u.principal.toText()}>{u.name}</option>)}</select></div>
       <div style={styles.formActions}><button type="button" onClick={onCancel} style={styles.cancelBtn}>Cancel</button><button type="submit" disabled={loading} style={styles.submitBtn}>{loading ? 'Saving...' : 'Save Changes'}</button></div>
     </form>
   );
