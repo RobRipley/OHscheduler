@@ -173,6 +173,28 @@ function UserManagement() {
     }
   };
 
+  const handleGeneratePersonalInvite = async (user: User) => {
+    if (!actor) return;
+    setGeneratingInvite(user.principal.toText());
+    setError(null);
+    try {
+      const result = await actor.generate_personal_invite_code(user.principal);
+      if ('Ok' in result) {
+        setShowInviteCode({ code: result.Ok.code });
+      } else {
+        setError(getErrorMessage(result.Err));
+      }
+    } catch (err: any) {
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+      } else {
+        setError(err.message || 'Failed to generate invite code');
+      }
+    } finally {
+      setGeneratingInvite(null);
+    }
+  };
+
   if (actorLoading || loading) return <SkeletonTable rows={5} cols={5} />;
 
   return (
@@ -243,6 +265,17 @@ function UserManagement() {
                   </td>
                   <td style={styles.td}>
                     <div style={styles.actionGroup}>
+                      {isPending && (
+                        <button 
+                          style={styles.inviteBtnSmall} 
+                          onClick={() => handleGeneratePersonalInvite(user)} 
+                          disabled={generatingInvite === key}
+                          title="Generate personal invite code"
+                          aria-label={`Generate invite code for ${user.name}`}
+                        >
+                          {generatingInvite === key ? '...' : 'Invite'}
+                        </button>
+                      )}
                       <button style={styles.iconBtn} onClick={() => setEditingUser(user)} title="Edit" aria-label={`Edit ${user.name}`}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                       </button>
@@ -1433,6 +1466,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   pendingBadge: { background: 'rgba(251, 191, 36, 0.15)', color: '#FBBF24', padding: '3px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500 },
   inviteSentBadge: { background: 'rgba(99, 102, 241, 0.15)', color: theme.accent, padding: '3px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500 },
   inviteBtn: { display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', background: theme.accentMuted, color: theme.accent, border: `1px solid rgba(99, 102, 241, 0.3)`, borderRadius: '6px', cursor: 'pointer', transition: 'all 150ms ease-out', whiteSpace: 'nowrap' as const },
+  inviteBtnSmall: { padding: '2px 8px', fontSize: '11px', fontWeight: 500, background: 'rgba(99, 102, 241, 0.15)', color: theme.accent, border: `1px solid rgba(99, 102, 241, 0.3)`, borderRadius: '4px', cursor: 'pointer', transition: 'all 150ms ease-out', whiteSpace: 'nowrap' as const },
   emptyField: { color: theme.textMuted },
   linkBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '30px', height: '30px', background: 'rgba(99, 102, 241, 0.15)', color: theme.accent, border: `1px solid rgba(99, 102, 241, 0.3)`, borderRadius: '6px', cursor: 'pointer', transition: 'all 150ms ease-out' },
   optionalLabel: { color: theme.textMuted, fontWeight: 400, fontSize: '12px' },

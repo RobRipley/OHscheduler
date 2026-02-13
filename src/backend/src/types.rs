@@ -320,6 +320,7 @@ pub struct InviteCode {
     pub redeemed: bool,
     pub redeemed_by: Option<Principal>,
     pub redeemed_at: Option<u64>,
+    pub user_placeholder_principal: Option<Principal>,
 }
 
 const MAX_INVITE_CODE_SIZE: u32 = 512;
@@ -330,33 +331,60 @@ impl Storable for InviteCode {
     }
 
     fn from_bytes(bytes: Cow<[u8]>) -> Self {
-        match Decode!(bytes.as_ref(), Self) {
-            Ok(code) => code,
-            Err(_) => {
-                // Migration: old InviteCode had user_placeholder_principal instead of role
-                #[derive(CandidType, Deserialize)]
-                struct OldInviteCode {
-                    code: String,
-                    user_placeholder_principal: Principal,
-                    created_at: u64,
-                    created_by: Principal,
-                    expires_at: u64,
-                    redeemed: bool,
-                    redeemed_by: Option<Principal>,
-                    redeemed_at: Option<u64>,
-                }
-                let old = Decode!(bytes.as_ref(), OldInviteCode).unwrap();
-                InviteCode {
-                    code: old.code,
-                    role: Role::User, // default old invites to User role
-                    created_at: old.created_at,
-                    created_by: old.created_by,
-                    expires_at: old.expires_at,
-                    redeemed: old.redeemed,
-                    redeemed_by: old.redeemed_by,
-                    redeemed_at: old.redeemed_at,
-                }
-            }
+        // Try current format first (has role + user_placeholder_principal)
+        if let Ok(code) = Decode!(bytes.as_ref(), Self) {
+            return code;
+        }
+        
+        // Migration: mid-version had role but no user_placeholder_principal
+        #[derive(CandidType, Deserialize)]
+        struct MidInviteCode {
+            code: String,
+            role: Role,
+            created_at: u64,
+            created_by: Principal,
+            expires_at: u64,
+            redeemed: bool,
+            redeemed_by: Option<Principal>,
+            redeemed_at: Option<u64>,
+        }
+        if let Ok(mid) = Decode!(bytes.as_ref(), MidInviteCode) {
+            return InviteCode {
+                code: mid.code,
+                role: mid.role,
+                created_at: mid.created_at,
+                created_by: mid.created_by,
+                expires_at: mid.expires_at,
+                redeemed: mid.redeemed,
+                redeemed_by: mid.redeemed_by,
+                redeemed_at: mid.redeemed_at,
+                user_placeholder_principal: None,
+            };
+        }
+
+        // Migration: old format had user_placeholder_principal instead of role
+        #[derive(CandidType, Deserialize)]
+        struct OldInviteCode {
+            code: String,
+            user_placeholder_principal: Principal,
+            created_at: u64,
+            created_by: Principal,
+            expires_at: u64,
+            redeemed: bool,
+            redeemed_by: Option<Principal>,
+            redeemed_at: Option<u64>,
+        }
+        let old = Decode!(bytes.as_ref(), OldInviteCode).unwrap();
+        InviteCode {
+            code: old.code,
+            role: Role::User,
+            created_at: old.created_at,
+            created_by: old.created_by,
+            expires_at: old.expires_at,
+            redeemed: old.redeemed,
+            redeemed_by: old.redeemed_by,
+            redeemed_at: old.redeemed_at,
+            user_placeholder_principal: Some(old.user_placeholder_principal),
         }
     }
 

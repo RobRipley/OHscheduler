@@ -155,6 +155,7 @@ type InviteCode = record {
     redeemed: bool;
     redeemed_by: opt principal;
     redeemed_at: opt nat64;
+    user_placeholder_principal: opt principal;
 };
 
 type Result_User = variant { Ok: User; Err: ApiError };
@@ -223,6 +224,7 @@ service : {
 
     // Invite Codes
     generate_invite_code : (Role) -> (Result_InviteCode);
+    generate_personal_invite_code : (principal) -> (Result_InviteCode);
     redeem_invite_code : (text, text, text) -> (Result_User);
     list_invite_codes : () -> (Result_Vec_InviteCode) query;
 }

@@ -163,6 +163,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'redeemed': IDL.Bool,
     'redeemed_by': IDL.Opt(IDL.Principal),
     'redeemed_at': IDL.Opt(IDL.Nat64),
+    'user_placeholder_principal': IDL.Opt(IDL.Principal),
   });
   const Result_InviteCode = IDL.Variant({ 'Ok': InviteCode, 'Err': ApiError });
   const Result_Vec_InviteCode = IDL.Variant({ 'Ok': IDL.Vec(InviteCode), 'Err': ApiError });
@@ -224,6 +225,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
 
     // Invite Codes
     'generate_invite_code': IDL.Func([Role], [Result_InviteCode], []),
+    'generate_personal_invite_code': IDL.Func([IDL.Principal], [Result_InviteCode], []),
     'redeem_invite_code': IDL.Func([IDL.Text, IDL.Text, IDL.Text], [Result_User], []),
     'list_invite_codes': IDL.Func([], [Result_Vec_InviteCode], ['query']),
   });
@@ -324,6 +326,7 @@ export interface InviteCode {
   redeemed: boolean;
   redeemed_by: [Principal] | [];
   redeemed_at: [bigint] | [];
+  user_placeholder_principal: [Principal] | [];
 }
 
 export interface CreateSeriesInput {

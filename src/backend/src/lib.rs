@@ -639,13 +639,61 @@ async fn generate_invite_code(role: Role) -> ApiResult<InviteCode> {
         redeemed: false,
         redeemed_by: None,
         redeemed_at: None,
+        user_placeholder_principal: None,
     };
     
     storage::insert_invite_code(invite.clone());
     Ok(invite)
 }
 
-/// Redeem an invite code — creates a new user with the caller's II principal.
+/// Generate a personal invite code tied to a specific pre-created user (admin only).
+/// When redeemed, the caller's II principal replaces the placeholder principal on the existing user.
+#[update]
+async fn generate_personal_invite_code(placeholder_principal: Principal) -> ApiResult<InviteCode> {
+    let admin = auth::require_admin()?;
+    let now = ic_cdk::api::time();
+    
+    // Validate user exists
+    let user = storage::get_user(&placeholder_principal)
+        .ok_or(ApiError::NotFound)?;
+    
+    // Generate random bytes via management canister
+    let (random_bytes,): (Vec<u8>,) = ic_cdk::api::management_canister::main::raw_rand()
+        .await
+        .map_err(|e| ApiError::InternalError(format!("Failed to generate random bytes: {:?}", e)))?;
+    
+    let charset: &[u8] = b"ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+    let mut code_chars = String::from("YS-");
+    for i in 0..4 {
+        let idx = (random_bytes[i] as usize) % charset.len();
+        code_chars.push(charset[idx] as char);
+    }
+    code_chars.push('-');
+    for i in 4..8 {
+        let idx = (random_bytes[i] as usize) % charset.len();
+        code_chars.push(charset[idx] as char);
+    }
+    
+    let invite = InviteCode {
+        code: code_chars,
+        role: user.role.clone(),
+        created_at: now,
+        created_by: admin.principal,
+        expires_at: now + 7 * 24 * 60 * 60 * 1_000_000_000,
+        redeemed: false,
+        redeemed_by: None,
+        redeemed_at: None,
+        user_placeholder_principal: Some(placeholder_principal),
+    };
+    
+    storage::insert_invite_code(invite.clone());
+    Ok(invite)
+}
+
+/// Redeem an invite code.
+/// - Personal codes (tied to a pre-created user): swaps placeholder principal → caller's II principal.
+///   Name and email params are ignored since the user already has them.
+/// - Generic codes (role-only): creates a new user with the caller's principal, name, and email.
 /// Caller must be authenticated via II but does NOT need to be authorized.
 #[update]
 fn redeem_invite_code(code: String, name: String, email: String) -> ApiResult<User> {
@@ -654,16 +702,6 @@ fn redeem_invite_code(code: String, name: String, email: String) -> ApiResult<Us
     // Check caller isn't already an authorized user
     if storage::user_exists(&caller_principal) {
         return Err(ApiError::Conflict("You are already an authorized user.".to_string()));
-    }
-    
-    // Validate inputs
-    let name = name.trim().to_string();
-    let email = email.trim().to_string();
-    if name.is_empty() {
-        return Err(ApiError::InvalidInput("Name is required.".to_string()));
-    }
-    if email.is_empty() || !email.contains('@') {
-        return Err(ApiError::InvalidInput("A valid email is required.".to_string()));
     }
     
     let code_upper = code.trim().to_uppercase();
@@ -681,22 +719,58 @@ fn redeem_invite_code(code: String, name: String, email: String) -> ApiResult<Us
         return Err(ApiError::InvalidInput("This invite code has expired.".to_string()));
     }
     
-    // Create the user with the role from the invite code
-    let new_user = User {
-        principal: caller_principal,
-        name,
-        email,
-        role: invite.role.clone(),
-        status: UserStatus::Active,
-        out_of_office: vec![],
-        notification_settings: NotificationSettings::default(),
-        last_active: now,
-        sessions_hosted_count: 0,
-        created_at: now,
-        updated_at: now,
+    let user = if let Some(placeholder) = invite.user_placeholder_principal {
+        // ── Personal invite: swap placeholder principal on existing user ──
+        let mut existing_user = storage::get_user(&placeholder)
+            .ok_or(ApiError::NotFound)?;
+        
+        // Remove old entry keyed by placeholder principal
+        storage::delete_user(&placeholder);
+        
+        // Update principal and reinsert with new key
+        existing_user.principal = caller_principal;
+        existing_user.status = UserStatus::Active;
+        existing_user.last_active = now;
+        existing_user.updated_at = now;
+        storage::insert_user(existing_user.clone());
+        
+        // Update host_principal on any event instances assigned to the placeholder
+        for mut instance in storage::list_all_instances() {
+            if instance.host_principal == Some(placeholder) {
+                instance.host_principal = Some(caller_principal);
+                storage::insert_instance(instance);
+            }
+        }
+        
+        existing_user
+    } else {
+        // ── Generic invite: create a brand new user ──
+        let name = name.trim().to_string();
+        let email = email.trim().to_string();
+        if name.is_empty() {
+            return Err(ApiError::InvalidInput("Name is required.".to_string()));
+        }
+        if email.is_empty() || !email.contains('@') {
+            return Err(ApiError::InvalidInput("A valid email is required.".to_string()));
+        }
+        
+        let new_user = User {
+            principal: caller_principal,
+            name,
+            email,
+            role: invite.role.clone(),
+            status: UserStatus::Active,
+            out_of_office: vec![],
+            notification_settings: NotificationSettings::default(),
+            last_active: now,
+            sessions_hosted_count: 0,
+            created_at: now,
+            updated_at: now,
+        };
+        
+        storage::insert_user(new_user.clone());
+        new_user
     };
-    
-    storage::insert_user(new_user.clone());
     
     // Mark invite as redeemed
     invite.redeemed = true;
@@ -704,7 +778,7 @@ fn redeem_invite_code(code: String, name: String, email: String) -> ApiResult<Us
     invite.redeemed_at = Some(now);
     storage::insert_invite_code(invite);
     
-    Ok(new_user)
+    Ok(user)
 }
 
 /// List all invite codes (admin only)
