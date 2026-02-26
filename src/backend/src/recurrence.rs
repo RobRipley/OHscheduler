@@ -179,22 +179,28 @@ fn generate_occurrences(
         return occurrences;
     }
     
+    // Extract time-of-day from series start_date (nanos since midnight UTC)
+    // so that generated occurrences preserve the original event time
+    let day_nanos: u64 = 86400 * 1_000_000_000;
+    let time_of_day = series.start_date % day_nanos;
+
     let (start_year, start_month, _) = nanos_to_ymd(effective_start);
     let (end_year, end_month, _) = nanos_to_ymd(effective_end);
-    
+
     match series.frequency {
         Frequency::Monthly => {
             let ordinal = series.weekday_ordinal.unwrap_or(WeekdayOrdinal::First);
             let mut year = start_year;
             let mut month = start_month;
-            
+
             while year < end_year || (year == end_year && month <= end_month) {
-                if let Some(occ) = nth_weekday_of_month(year, month, series.weekday, ordinal) {
+                if let Some(occ_date) = nth_weekday_of_month(year, month, series.weekday, ordinal) {
+                    let occ = occ_date + time_of_day;
                     if occ >= effective_start && occ < effective_end {
                         occurrences.push(occ);
                     }
                 }
-                
+
                 month += 1;
                 if month > 12 {
                     month = 1;
@@ -203,15 +209,17 @@ fn generate_occurrences(
             }
         }
         Frequency::Weekly | Frequency::Biweekly => {
-            // Find first occurrence on or after effective_start
+            // Strip time from effective_start for consistent day-of-week calculation,
+            // then apply the series' time-of-day to each occurrence
+            let effective_start_day = effective_start - (effective_start % day_nanos);
             let target_wd = series.weekday as u32;
-            let start_wd = weekday_from_nanos(effective_start);
+            let start_wd = weekday_from_nanos(effective_start_day);
             let days_until = (target_wd + 7 - start_wd) % 7;
-            let first_occ = effective_start + days_until as u64 * 86400 * 1_000_000_000;
-            
+            let first_occ = effective_start_day + days_until as u64 * day_nanos + time_of_day;
+
             let interval_days: u64 = if series.frequency == Frequency::Biweekly { 14 } else { 7 };
-            let interval_nanos = interval_days * 86400 * 1_000_000_000;
-            
+            let interval_nanos = interval_days * day_nanos;
+
             let mut occ = first_occ;
             while occ < effective_end {
                 if occ >= series.start_date {
