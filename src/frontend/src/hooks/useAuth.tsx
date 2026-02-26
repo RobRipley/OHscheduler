@@ -296,9 +296,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const thirtyDaysInNanoseconds = BigInt(30 * 24 * 60 * 60 * 1000 * 1000 * 1000);
       
       console.log('[Auth] Calling authClient.login with provider:', getIdentityProviderUrl());
+      // Derive principal from the canister origin so custom domain users get the same principal
+      const network = import.meta.env.VITE_DFX_NETWORK || 'local';
+      const derivationOrigin = network === 'ic'
+        ? 'https://6sm6t-iiaaa-aaaad-aebwq-cai.icp0.io'
+        : undefined;
+
       await client.login({
         identityProvider: getIdentityProviderUrl(),
         maxTimeToLive: thirtyDaysInNanoseconds,
+        ...(derivationOrigin && { derivationOrigin }),
         onSuccess: async () => {
           console.log('[Auth] Login success callback');
           loginInProgressRef.current = false;

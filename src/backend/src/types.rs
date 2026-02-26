@@ -145,6 +145,7 @@ pub struct EventSeries {
     pub default_duration_minutes: u32,
     pub color: Option<String>,
     pub paused: bool,
+    pub exclude_from_coverage: bool,
     pub default_host: Option<Principal>,
     pub created_at: u64,
     pub created_by: Principal,
@@ -162,6 +163,7 @@ pub struct EventInstance {
     pub host_principal: Option<Principal>,
     pub status: EventStatus,
     pub color: Option<String>,
+    pub exclude_from_coverage: bool,
     pub created_at: u64,
 }
 
@@ -253,6 +255,7 @@ pub struct CreateSeriesInput {
     pub default_duration_minutes: Option<u32>,
     pub color: Option<String>,
     pub default_host: Option<Principal>,
+    pub exclude_from_coverage: Option<bool>,
 }
 
 
@@ -265,6 +268,7 @@ pub struct UpdateSeriesInput {
     pub color: Option<Option<String>>,  // None = don't change, Some(None) = clear, Some(Some(x)) = set to x
     pub paused: Option<bool>,
     pub default_host: Option<Option<Principal>>,  // None = don't change, Some(None) = clear, Some(Some(p)) = set
+    pub exclude_from_coverage: Option<bool>,
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
@@ -324,6 +328,13 @@ pub struct InviteCode {
     pub redeemed_by: Option<Principal>,
     pub redeemed_at: Option<u64>,
     pub user_placeholder_principal: Option<Principal>,
+}
+
+#[derive(CandidType, Deserialize, Clone, Debug)]
+pub struct InviteCodeInfo {
+    pub is_personal: bool,
+    pub prefilled_name: Option<String>,
+    pub prefilled_email: Option<String>,
 }
 
 const MAX_INVITE_CODE_SIZE: u32 = 512;
@@ -484,6 +495,45 @@ impl Storable for EventSeries {
         match Decode!(bytes.as_ref(), Self) {
             Ok(s) => s,
             Err(_) => {
+                // V4: has color+paused+default_host but no exclude_from_coverage
+                #[derive(CandidType, Deserialize)]
+                struct V4EventSeries {
+                    series_id: [u8; 16],
+                    title: String,
+                    notes: String,
+                    link: Option<String>,
+                    frequency: Frequency,
+                    weekday: Weekday,
+                    weekday_ordinal: Option<WeekdayOrdinal>,
+                    start_date: u64,
+                    end_date: Option<u64>,
+                    default_duration_minutes: u32,
+                    color: Option<String>,
+                    paused: bool,
+                    default_host: Option<Principal>,
+                    created_at: u64,
+                    created_by: Principal,
+                }
+                if let Ok(v4) = Decode!(bytes.as_ref(), V4EventSeries) {
+                    return EventSeries {
+                        series_id: v4.series_id,
+                        title: v4.title,
+                        notes: v4.notes,
+                        link: v4.link,
+                        frequency: v4.frequency,
+                        weekday: v4.weekday,
+                        weekday_ordinal: v4.weekday_ordinal,
+                        start_date: v4.start_date,
+                        end_date: v4.end_date,
+                        default_duration_minutes: v4.default_duration_minutes,
+                        color: v4.color,
+                        paused: v4.paused,
+                        exclude_from_coverage: false,
+                        default_host: v4.default_host,
+                        created_at: v4.created_at,
+                        created_by: v4.created_by,
+                    };
+                }
                 // V3: has color+paused but no default_host
                 #[derive(CandidType, Deserialize)]
                 struct V3EventSeries {
@@ -516,6 +566,7 @@ impl Storable for EventSeries {
                         default_duration_minutes: v3.default_duration_minutes,
                         color: v3.color,
                         paused: v3.paused,
+                        exclude_from_coverage: false,
                         default_host: None,
                         created_at: v3.created_at,
                         created_by: v3.created_by,
@@ -552,6 +603,7 @@ impl Storable for EventSeries {
                         default_duration_minutes: mid.default_duration_minutes,
                         color: mid.color,
                         paused: false,
+                        exclude_from_coverage: false,
                         default_host: None,
                         created_at: mid.created_at,
                         created_by: mid.created_by,
@@ -587,6 +639,7 @@ impl Storable for EventSeries {
                     default_duration_minutes: old.default_duration_minutes,
                     color: None,
                     paused: false,
+                    exclude_from_coverage: false,
                     default_host: None,
                     created_at: old.created_at,
                     created_by: old.created_by,
@@ -611,7 +664,38 @@ impl Storable for EventInstance {
         match Decode!(bytes.as_ref(), Self) {
             Ok(i) => i,
             Err(_) => {
-                // Try decoding as old EventInstance format (without color)
+                // Try decoding as previous format (with color but without exclude_from_coverage)
+                #[derive(CandidType, Deserialize)]
+                struct PrevEventInstance {
+                    instance_id: [u8; 16],
+                    series_id: Option<[u8; 16]>,
+                    start_utc: u64,
+                    end_utc: u64,
+                    title: String,
+                    notes: String,
+                    link: Option<String>,
+                    host_principal: Option<Principal>,
+                    status: EventStatus,
+                    color: Option<String>,
+                    created_at: u64,
+                }
+                if let Ok(prev) = Decode!(bytes.as_ref(), PrevEventInstance) {
+                    return EventInstance {
+                        instance_id: prev.instance_id,
+                        series_id: prev.series_id,
+                        start_utc: prev.start_utc,
+                        end_utc: prev.end_utc,
+                        title: prev.title,
+                        notes: prev.notes,
+                        link: prev.link,
+                        host_principal: prev.host_principal,
+                        status: prev.status,
+                        color: prev.color,
+                        exclude_from_coverage: false,
+                        created_at: prev.created_at,
+                    };
+                }
+                // Try decoding as oldest format (without color or exclude_from_coverage)
                 #[derive(CandidType, Deserialize)]
                 struct OldEventInstance {
                     instance_id: [u8; 16],
@@ -637,6 +721,7 @@ impl Storable for EventInstance {
                     host_principal: old.host_principal,
                     status: old.status,
                     color: None,
+                    exclude_from_coverage: false,
                     created_at: old.created_at,
                 }
             }

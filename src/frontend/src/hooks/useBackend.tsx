@@ -60,6 +60,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'color': IDL.Opt(IDL.Text),
     'paused': IDL.Bool,
     'default_host': IDL.Opt(IDL.Principal),
+    'exclude_from_coverage': IDL.Bool,
     'created_at': IDL.Nat64,
     'created_by': IDL.Principal,
   });
@@ -76,6 +77,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'host_principal': IDL.Opt(IDL.Principal),
     'status': EventStatus,
     'color': IDL.Opt(IDL.Text),
+    'exclude_from_coverage': IDL.Bool,
     'created_at': IDL.Nat64,
   });
 
@@ -117,6 +119,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'default_duration_minutes': IDL.Opt(IDL.Nat32),
     'color': IDL.Opt(IDL.Text),
     'default_host': IDL.Opt(IDL.Principal),
+    'exclude_from_coverage': IDL.Opt(IDL.Bool),
   });
 
 
@@ -128,6 +131,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'color': IDL.Opt(IDL.Opt(IDL.Text)),
     'paused': IDL.Opt(IDL.Bool),
     'default_host': IDL.Opt(IDL.Opt(IDL.Principal)),
+    'exclude_from_coverage': IDL.Opt(IDL.Bool),
   });
 
   const ApiError = IDL.Variant({
@@ -282,6 +286,7 @@ export interface EventInstance {
   host_principal: [Principal] | [];
   status: { Active: null } | { Cancelled: null };
   color: [string] | [];
+  exclude_from_coverage: boolean;
   created_at: bigint;
 }
 
@@ -300,6 +305,7 @@ export interface EventSeries {
   color: [string] | [];
   paused: boolean;
   default_host: [Principal] | [];
+  exclude_from_coverage: boolean;
   created_at: bigint;
   created_by: Principal;
 }
@@ -345,6 +351,7 @@ export interface CreateSeriesInput {
   default_duration_minutes: [number] | [];
   color: [string] | [];
   default_host: [Principal] | [];
+  exclude_from_coverage: [boolean] | [];
 }
 
 

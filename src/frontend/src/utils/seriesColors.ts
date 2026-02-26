@@ -26,6 +26,16 @@ function hashString(str: string): number {
 
 export function getSeriesColor(title: string, colorOverride?: string) {
   if (colorOverride) {
+    // Custom hex color
+    if (colorOverride.startsWith('#')) {
+      return {
+        bg: `${colorOverride}26`,    // ~15% opacity
+        border: colorOverride,
+        text: colorOverride,
+        label: 'Custom',
+      };
+    }
+    // Preset index
     const idx = parseInt(colorOverride);
     if (!isNaN(idx) && idx >= 0 && idx < SERIES_COLORS.length) return SERIES_COLORS[idx];
   }

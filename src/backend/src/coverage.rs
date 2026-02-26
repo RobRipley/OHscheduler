@@ -45,6 +45,21 @@ pub fn assign_host(
         ));
     }
     
+    // Handle shift swap: notify and decrement previous host if being replaced
+    let previous_instance = get_event_instance(series_id, occurrence_start, &instance_id)?;
+    if let Some(prev_host_principal) = previous_instance.host_principal {
+        if prev_host_principal != host_principal {
+            if let Some(mut prev_host_user) = storage::get_user(&prev_host_principal) {
+                notifications::create_host_removed_notification(
+                    &prev_host_user, &instance_id, event_start, event_end,
+                );
+                prev_host_user.sessions_hosted_count = prev_host_user.sessions_hosted_count.saturating_sub(1);
+                prev_host_user.updated_at = now;
+                storage::update_user(prev_host_user);
+            }
+        }
+    }
+
     // Perform assignment
     if let Some(sid) = series_id {
         // Series instance: create/update override
@@ -158,10 +173,13 @@ pub fn unassign_host(
         storage::insert_instance(inst);
     }
     
-    // Create notification for removed host
+    // Notify removed host and decrement their session count
     if let Some(host_principal) = previous_host {
-        if let Some(host_user) = storage::get_user(&host_principal) {
+        if let Some(mut host_user) = storage::get_user(&host_principal) {
             notifications::create_host_removed_notification(&host_user, &instance_id, event_start, event_end);
+            host_user.sessions_hosted_count = host_user.sessions_hosted_count.saturating_sub(1);
+            host_user.updated_at = now;
+            storage::update_user(host_user);
         }
     }
     
@@ -244,6 +262,7 @@ fn get_event_instance(
             host_principal,
             status: EventStatus::Active,
             color: series.color,
+            exclude_from_coverage: series.exclude_from_coverage,
             created_at: series.created_at,
         })
     } else {

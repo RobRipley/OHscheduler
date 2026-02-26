@@ -4,6 +4,7 @@ import { useBackend } from '../hooks/useBackend';
 import Calendar from './Calendar';
 import CoverageQueue from './CoverageQueue';
 import AdminPanel from './AdminPanel';
+import CoverageReport from './CoverageReport';
 import NotificationBell from './NotificationBell';
 import { Avatar } from './ui';
 import { theme } from '../theme';
@@ -71,6 +72,15 @@ export default function AuthenticatedLayout() {
             >
               Coverage Queue
             </NavLink>
+            <NavLink
+              to="/dashboard/reports"
+              style={({ isActive }) => ({
+                ...styles.navLink,
+                ...(isActive ? styles.navLinkActive : {}),
+              })}
+            >
+              Reports
+            </NavLink>
             {isAdmin && (
               <NavLink 
                 to="/dashboard/admin"
@@ -109,6 +119,7 @@ export default function AuthenticatedLayout() {
         <Routes>
           <Route index element={<Calendar />} />
           <Route path="queue" element={<CoverageQueue />} />
+          <Route path="reports" element={<CoverageReport />} />
           {isAdmin && <Route path="admin/*" element={<AdminPanel />} />}
         </Routes>
       </main>

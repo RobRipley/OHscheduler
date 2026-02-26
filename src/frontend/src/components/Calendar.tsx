@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useBackend, EventInstance, nanosToDate, dateToNanos, bytesToHex, User, UserDirectoryEntry, isSessionExpiredError } from '../hooks/useBackend';
 import { useAuth } from '../hooks/useAuth';
 import { useTimezone } from '../hooks/useTimezone';
-import { Modal, Button, Select, SkeletonCalendar } from './ui';
+import { Modal, Button, Select, SkeletonCalendar, useConfirm } from './ui';
 import type { SelectOption } from './ui';
 import TimezoneButton from './TimezoneButton';
 import { getSeriesColor, NO_HOST_COLOR } from '../utils/seriesColors';
@@ -462,6 +462,8 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
   const [icsLoading, setIcsLoading] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const { timezone, abbrev } = useTimezone();
+  const confirm = useConfirm();
+  const hasHost = event.host_principal.length > 0;
 
   const formatTimeInTz = (nanos: bigint) => {
     return nanosToDate(nanos).toLocaleTimeString('en-US', {
@@ -487,7 +489,18 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
     }
     const selectedUser = users.get(selectedUserId);
     if (!selectedUser) return;
-    
+
+    // Confirm if reassigning over an existing host
+    if (hasHost && selectedUser.principal.toText() !== event.host_principal[0]?.toText()) {
+      const confirmed = await confirm({
+        title: 'Reassign this shift?',
+        message: `This shift is currently assigned to ${hostName}. Reassigning will remove them and they'll be notified.`,
+        confirmLabel: 'Reassign',
+        variant: 'default',
+      });
+      if (!confirmed) return;
+    }
+
     setActionLoading(true);
     setActionError(null);
     try {
@@ -528,6 +541,40 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
         setActionError('Your session has expired. Please sign in again.');
       } else {
         setActionError('Failed to remove host');
+      }
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleTakeShift = async () => {
+    if (!currentUser) return;
+
+    const confirmed = await confirm({
+      title: 'Take this shift?',
+      message: `This shift is currently assigned to ${hostName}. Taking it will remove them and they'll be notified.`,
+      confirmLabel: 'Take shift',
+      variant: 'default',
+    });
+    if (!confirmed) return;
+
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const result = await actor.assign_host(
+        event.series_id,
+        (event.series_id && event.series_id.length > 0) ? [event.start_utc] : [],
+        event.instance_id,
+        currentUser.principal
+      );
+      if ('Ok' in result) onRefresh();
+      else setActionError(getErrorMessage(result.Err));
+    } catch (err) {
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setActionError('Your session has expired. Please sign in again.');
+      } else {
+        setActionError('Failed to take shift');
       }
     } finally {
       setActionLoading(false);
@@ -608,7 +655,12 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
         )}
         {actionError && <div style={modalStyles.error}>{actionError}</div>}
         <div style={modalStyles.actions}>
-          {!isCancelled && isNoHost && (
+          {!isCancelled && hasHost && !isHost && !isAdmin && (
+            <Button variant="primary" onClick={handleTakeShift} loading={actionLoading}>
+              Take this shift
+            </Button>
+          )}
+          {!isCancelled && (isNoHost || isAdmin) && (
             <div style={modalStyles.assignSection}>
               <Select
                 options={hostOptions}
@@ -620,7 +672,7 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
                 style={{ flex: 1 }}
               />
               <Button variant="primary" onClick={handleAssignHost} loading={actionLoading} disabled={!selectedUserId}>
-                Assign host
+                {hasHost ? 'Reassign host' : 'Assign host'}
               </Button>
             </div>
           )}
@@ -629,12 +681,12 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
               Remove myself
             </Button>
           )}
-          {!isCancelled && !isHost && isAdmin && event.host_principal.length > 0 && (
+          {!isCancelled && !isHost && isAdmin && hasHost && (
             <Button variant="secondary" onClick={handleRemoveHost} loading={actionLoading}>
               Remove host
             </Button>
           )}
-          {!isCancelled && event.host_principal.length > 0 && (
+          {!isCancelled && hasHost && (
             <Button variant="secondary" onClick={handleDownloadIcs} loading={icsLoading}>
               Add to calendar
             </Button>
