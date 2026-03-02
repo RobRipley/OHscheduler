@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useBackend, EventInstance, nanosToDate, dateToNanos, bytesToHex, User, UserDirectoryEntry, isSessionExpiredError } from '../hooks/useBackend';
 import { useAuth } from '../hooks/useAuth';
-import { useTimezone } from '../hooks/useTimezone';
-import { Modal, Button, Select, SkeletonCalendar } from './ui';
+import { useTimezone, parseDateTimeInTz } from '../hooks/useTimezone';
+import { Modal, Button, Select, SkeletonCalendar, useConfirm } from './ui';
 import type { SelectOption } from './ui';
 import TimezoneButton from './TimezoneButton';
 import { getSeriesColor, NO_HOST_COLOR } from '../utils/seriesColors';
@@ -35,7 +35,7 @@ export default function Calendar() {
     });
   };
 
-  // Helper: get date key (YYYY-MM-DD) in user's timezone
+  // Helper: get date key (YYYY-MM-DD) in user's timezone from nanos
   const getDateKeyInTz = (nanos: bigint) => {
     const d = nanosToDate(nanos);
     const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).formatToParts(d);
@@ -45,10 +45,19 @@ export default function Calendar() {
     return `${year}-${month}-${day}`;
   };
 
+  // Helper: get date key (YYYY-MM-DD) from a Date object in the user's selected timezone
+  const getDateKeyFromDate = (date: Date) => {
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).formatToParts(date);
+    const year = parts.find(p => p.type === 'year')?.value;
+    const month = parts.find(p => p.type === 'month')?.value;
+    const day = parts.find(p => p.type === 'day')?.value;
+    return `${year}-${month}-${day}`;
+  };
+
   const { windowStart, windowEnd } = useMemo(() => {
     const start = new Date(currentDate);
     const end = new Date(currentDate);
-    
+
     if (viewMode === 'week') {
       start.setDate(start.getDate() - start.getDay());
       start.setHours(0, 0, 0, 0);
@@ -60,8 +69,13 @@ export default function Calendar() {
       end.setMonth(end.getMonth() + 1, 0);
       end.setHours(23, 59, 59, 999);
     }
-    
-    return { windowStart: dateToNanos(start), windowEnd: dateToNanos(end) };
+
+    // Pad by ±1 day to ensure events near timezone boundaries are always fetched.
+    // The timezone-aware date keying will place them on the correct calendar day.
+    const dayMs = 24 * 60 * 60 * 1000;
+    const padStart = new Date(start.getTime() - dayMs);
+    const padEnd = new Date(end.getTime() + dayMs);
+    return { windowStart: dateToNanos(padStart), windowEnd: dateToNanos(padEnd) };
   }, [currentDate, viewMode]);
 
   useEffect(() => {
@@ -224,7 +238,7 @@ export default function Calendar() {
   }
 
   const isCurrentMonth = (date: Date) => date.getMonth() === currentDate.getMonth();
-  const todayKey = new Date().toISOString().split('T')[0];
+  const todayKey = getDateKeyFromDate(new Date());
 
   return (
     <div style={styles.container}>
@@ -263,7 +277,7 @@ export default function Calendar() {
           {calendarGrid.map((week, weekIdx) => (
             <div key={weekIdx} style={styles.weekRow}>
               {week.map(date => {
-                const dateKey = date.toISOString().split('T')[0];
+                const dateKey = getDateKeyFromDate(date);
                 const dayEvents = eventsByDate.get(dateKey) || [];
                 const isToday = dateKey === todayKey;
                 const inMonth = isCurrentMonth(date);
@@ -321,7 +335,7 @@ export default function Calendar() {
       ) : viewMode === 'week' ? (
         <div style={styles.weekCalendar}>
           {calendarGrid[0].map(date => {
-            const dateKey = date.toISOString().split('T')[0];
+            const dateKey = getDateKeyFromDate(date);
             const dayEvents = eventsByDate.get(dateKey) || [];
             const isToday = dateKey === todayKey;
             
@@ -462,6 +476,8 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
   const [icsLoading, setIcsLoading] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const { timezone, abbrev } = useTimezone();
+  const confirm = useConfirm();
+  const hasHost = event.host_principal.length > 0;
 
   const formatTimeInTz = (nanos: bigint) => {
     return nanosToDate(nanos).toLocaleTimeString('en-US', {
@@ -487,13 +503,24 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
     }
     const selectedUser = users.get(selectedUserId);
     if (!selectedUser) return;
-    
+
+    // Confirm if reassigning over an existing host
+    if (hasHost && selectedUser.principal.toText() !== event.host_principal[0]?.toText()) {
+      const confirmed = await confirm({
+        title: 'Reassign this shift?',
+        message: `This shift is currently assigned to ${hostName}. Reassigning will remove them and they'll be notified.`,
+        confirmLabel: 'Reassign',
+        variant: 'default',
+      });
+      if (!confirmed) return;
+    }
+
     setActionLoading(true);
     setActionError(null);
     try {
       const result = await actor.assign_host(
         event.series_id,
-        (event.series_id && event.series_id.length > 0) ? [event.start_utc] : [],
+        (event.series_id && event.series_id.length > 0) ? [event.occurrence_start_utc.length > 0 ? event.occurrence_start_utc[0] : event.start_utc] : [],
         event.instance_id,
         selectedUser.principal
       );
@@ -517,7 +544,7 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
     try {
       const result = await actor.unassign_host(
         event.series_id,
-        (event.series_id && event.series_id.length > 0) ? [event.start_utc] : [],
+        (event.series_id && event.series_id.length > 0) ? [event.occurrence_start_utc.length > 0 ? event.occurrence_start_utc[0] : event.start_utc] : [],
         event.instance_id
       );
       if ('Ok' in result) onRefresh();
@@ -528,6 +555,73 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
         setActionError('Your session has expired. Please sign in again.');
       } else {
         setActionError('Failed to remove host');
+      }
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleTakeShift = async () => {
+    if (!currentUser) return;
+
+    const confirmed = await confirm({
+      title: 'Take this shift?',
+      message: `This shift is currently assigned to ${hostName}. Taking it will remove them and they'll be notified.`,
+      confirmLabel: 'Take shift',
+      variant: 'default',
+    });
+    if (!confirmed) return;
+
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const result = await actor.assign_host(
+        event.series_id,
+        (event.series_id && event.series_id.length > 0) ? [event.occurrence_start_utc.length > 0 ? event.occurrence_start_utc[0] : event.start_utc] : [],
+        event.instance_id,
+        currentUser.principal
+      );
+      if ('Ok' in result) onRefresh();
+      else setActionError(getErrorMessage(result.Err));
+    } catch (err) {
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setActionError('Your session has expired. Please sign in again.');
+      } else {
+        setActionError('Failed to take shift');
+      }
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCancelInstance = async () => {
+    if (!event.series_id || event.series_id.length === 0) return;
+
+    const confirmed = await confirm({
+      title: 'Cancel this event?',
+      message: hasHost ? `This will cancel the event and notify ${hostName}.` : 'This will cancel the event.',
+      confirmLabel: 'Cancel event',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const result = await actor.cancel_instance(
+        event.series_id[0],
+        event.occurrence_start_utc.length > 0 ? event.occurrence_start_utc[0] : event.start_utc,
+        event.instance_id
+      );
+      if ('Ok' in result) onRefresh();
+      else setActionError(getErrorMessage(result.Err));
+    } catch (err) {
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setActionError('Your session has expired. Please sign in again.');
+      } else {
+        setActionError('Failed to cancel event');
       }
     } finally {
       setActionLoading(false);
@@ -608,7 +702,12 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
         )}
         {actionError && <div style={modalStyles.error}>{actionError}</div>}
         <div style={modalStyles.actions}>
-          {!isCancelled && isNoHost && (
+          {!isCancelled && hasHost && !isHost && !isAdmin && (
+            <Button variant="primary" onClick={handleTakeShift} loading={actionLoading}>
+              Take this shift
+            </Button>
+          )}
+          {!isCancelled && (isNoHost || isAdmin) && (
             <div style={modalStyles.assignSection}>
               <Select
                 options={hostOptions}
@@ -620,7 +719,7 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
                 style={{ flex: 1 }}
               />
               <Button variant="primary" onClick={handleAssignHost} loading={actionLoading} disabled={!selectedUserId}>
-                Assign host
+                {hasHost ? 'Reassign host' : 'Assign host'}
               </Button>
             </div>
           )}
@@ -629,14 +728,19 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
               Remove myself
             </Button>
           )}
-          {!isCancelled && !isHost && isAdmin && event.host_principal.length > 0 && (
+          {!isCancelled && !isHost && isAdmin && hasHost && (
             <Button variant="secondary" onClick={handleRemoveHost} loading={actionLoading}>
               Remove host
             </Button>
           )}
-          {!isCancelled && event.host_principal.length > 0 && (
+          {!isCancelled && hasHost && (
             <Button variant="secondary" onClick={handleDownloadIcs} loading={icsLoading}>
               Add to calendar
+            </Button>
+          )}
+          {!isCancelled && isAdmin && event.series_id && event.series_id.length > 0 && (
+            <Button variant="danger" onClick={handleCancelInstance} loading={actionLoading}>
+              Cancel event
             </Button>
           )}
         </div>
@@ -664,7 +768,7 @@ function CreateEventModal({ actor, triggerSessionExpired, onClose, onCreated }: 
     setLoading(true);
     setError(null);
     try {
-      const startDateTime = new Date(`${date}T${startTime}:00`);
+      const startDateTime = parseDateTimeInTz(date, startTime, timezone);
       const endDateTime = new Date(startDateTime.getTime() + parseInt(duration) * 60 * 1000);
       const result = await actor.create_one_off_event({
         title: title.trim(),

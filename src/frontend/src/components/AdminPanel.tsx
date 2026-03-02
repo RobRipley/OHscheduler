@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Routes, Route, NavLink } from 'react-router-dom';
-import { useBackend, User, EventSeries, GlobalSettings, CoverageStats, InviteCode, nanosToDate, bytesToHex, dateToNanos, CreateSeriesInput, isSessionExpiredError } from '../hooks/useBackend';
+import { useBackend, User, EventSeries, GlobalSettings, InviteCode, nanosToDate, bytesToHex, dateToNanos, CreateSeriesInput, isSessionExpiredError } from '../hooks/useBackend';
 import { useAuth } from '../hooks/useAuth';
+import { useTimezone, parseDateTimeInTz } from '../hooks/useTimezone';
 import { Principal } from '@dfinity/principal';
 import { useConfirm, Toggle, Modal, Button, SkeletonTable } from './ui';
 import { theme } from '../theme';
@@ -25,7 +26,6 @@ export default function AdminPanel() {
         <NavLink to="/dashboard/admin" end className={({ isActive }) => `admin-tab${isActive ? ' admin-tab-active' : ''}`}>Users</NavLink>
         <NavLink to="/dashboard/admin/series" className={({ isActive }) => `admin-tab${isActive ? ' admin-tab-active' : ''}`}>Event Series</NavLink>
         <NavLink to="/dashboard/admin/settings" className={({ isActive }) => `admin-tab${isActive ? ' admin-tab-active' : ''}`}>Settings</NavLink>
-        <NavLink to="/dashboard/admin/reports" className={({ isActive }) => `admin-tab${isActive ? ' admin-tab-active' : ''}`}>Reports</NavLink>
       </div>
       
       <div style={styles.content}>
@@ -33,7 +33,6 @@ export default function AdminPanel() {
           <Route index element={<UserManagement />} />
           <Route path="series" element={<EventSeriesManagement />} />
           <Route path="settings" element={<SystemSettings />} />
-          <Route path="reports" element={<Reports />} />
         </Routes>
       </div>
     </div>
@@ -922,6 +921,7 @@ function EventSeriesManagement() {
 }
 
 function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { actor: any; triggerSessionExpired: () => void; onSuccess: () => void; onCancel: () => void }) {
+  const { timezone } = useTimezone();
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
   const [link, setLink] = useState('');
@@ -932,6 +932,7 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
   const [duration, setDuration] = useState('60');
   const [color, setColor] = useState('');
   const [defaultHost, setDefaultHost] = useState('');
+  const [excludeFromCoverage, setExcludeFromCoverage] = useState(false);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -943,8 +944,23 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
     }).catch(() => {});
   }, [actor]);
 
-  const derivedWeekday = startDate ? new Date(startDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long' }) : null;
+  const derivedWeekday = startDate ? parseDateTimeInTz(startDate, '12:00', timezone).toLocaleDateString('en-US', { weekday: 'long', timeZone: timezone }) : null;
   const weekdayMap: Record<string, string> = { Sunday: 'Sun', Monday: 'Mon', Tuesday: 'Tue', Wednesday: 'Wed', Thursday: 'Thu', Friday: 'Fri', Saturday: 'Sat' };
+
+  // Compute weekday ordinal for Monthly frequency (e.g., "1st Tuesday")
+  const derivedOrdinal = useMemo(() => {
+    if (!startDate || frequency !== 'Monthly') return null;
+    const d = parseDateTimeInTz(startDate, '12:00', timezone);
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: timezone, day: 'numeric' }).formatToParts(d);
+    const dayOfMonth = parseInt(parts.find(p => p.type === 'day')?.value || '1');
+    const ordinalIndex = Math.ceil(dayOfMonth / 7); // 1-based: 1st, 2nd, 3rd, 4th
+    // Check if this is the last occurrence of this weekday in the month
+    const nextWeek = new Date(d);
+    nextWeek.setDate(d.getDate() + 7);
+    const isLast = nextWeek.getMonth() !== d.getMonth();
+    const ordinalNames = ['First', 'Second', 'Third', 'Fourth'];
+    return isLast && ordinalIndex >= 4 ? 'Last' : ordinalNames[ordinalIndex - 1] || 'Fourth';
+  }, [startDate, frequency]);
 
   // Preview next 5 occurrences
   const previewDates = useMemo(() => {
@@ -955,12 +971,23 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
     const intervalDays = frequency === 'Weekly' ? 7 : frequency === 'Biweekly' ? 14 : 0;
     const end = endDate ? new Date(endDate + 'T23:59:59') : null;
     let current = new Date(start);
-    for (let i = 0; i < 5 && (intervalDays > 0); i++) {
+    for (let i = 0; i < 5; i++) {
       if (end && current > end) break;
       dates.push(new Date(current));
       if (frequency === 'Monthly') {
-        current = new Date(current);
-        current.setMonth(current.getMonth() + 1);
+        // Advance to same weekday ordinal in next month
+        const targetDay = start.getDay();
+        const ordIdx = Math.ceil(start.getDate() / 7);
+        const nextMonth = new Date(current);
+        nextMonth.setMonth(nextMonth.getMonth() + 1, 1); // 1st of next month
+        // Find the nth occurrence of targetDay
+        const firstDayOfMonth = nextMonth.getDay();
+        let firstOccurrence = 1 + ((targetDay - firstDayOfMonth + 7) % 7);
+        let nthOccurrence = firstOccurrence + (ordIdx - 1) * 7;
+        // If it overflows the month, use the last occurrence
+        const daysInMonth = new Date(nextMonth.getFullYear(), nextMonth.getMonth() + 1, 0).getDate();
+        if (nthOccurrence > daysInMonth) nthOccurrence -= 7;
+        current = new Date(nextMonth.getFullYear(), nextMonth.getMonth(), nthOccurrence, start.getHours(), start.getMinutes());
       } else {
         current = new Date(current.getTime() + intervalDays * 24 * 60 * 60 * 1000);
       }
@@ -977,19 +1004,20 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
       const weekdayKey = weekdayMap[derivedWeekday];
       const weekdayVariants: Record<string, any> = { Mon: { Mon: null }, Tue: { Tue: null }, Wed: { Wed: null }, Thu: { Thu: null }, Fri: { Fri: null }, Sat: { Sat: null }, Sun: { Sun: null } };
       const frequencyVariants: Record<string, any> = { Weekly: { Weekly: null }, Biweekly: { Biweekly: null }, Monthly: { Monthly: null } };
-      const startDateTime = new Date(`${startDate}T${startTime}:00`);
+      const startDateTime = parseDateTimeInTz(startDate, startTime, timezone);
       const input: CreateSeriesInput = {
         title: title.trim(),
         notes: notes.trim(),
         link: link.trim() ? [link.trim()] : [],
         frequency: frequencyVariants[frequency],
         weekday: weekdayVariants[weekdayKey],
-        weekday_ordinal: [],
+        weekday_ordinal: derivedOrdinal ? [{ [derivedOrdinal]: null } as any] : [],
         start_date: dateToNanos(startDateTime),
-        end_date: endDate ? [dateToNanos(new Date(endDate + 'T23:59:59'))] : [],
+        end_date: endDate ? [dateToNanos(parseDateTimeInTz(endDate, '23:59', timezone))] : [],
         default_duration_minutes: duration ? [parseInt(duration)] : [],
         color: color ? [color] : [],
         default_host: defaultHost ? [Principal.fromText(defaultHost)] : [],
+        exclude_from_coverage: excludeFromCoverage ? [true] : [],
       };
       const result = await actor.create_event_series(input);
       if ('Ok' in result) onSuccess();
@@ -1018,7 +1046,7 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
         <div style={styles.formRowHalf}><label style={styles.label}>Duration</label><select value={duration} onChange={e => setDuration(e.target.value)} style={styles.select}><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option></select></div>
       </div>
       <div style={styles.formRowGroup}>
-        <div style={styles.formRowHalf}><label style={styles.label}>First Session Date</label><input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={styles.input} required />{derivedWeekday && <div style={styles.derivedDay}>Every {derivedWeekday}</div>}</div>
+        <div style={styles.formRowHalf}><label style={styles.label}>First Session Date</label><input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={styles.input} required />{derivedWeekday && <div style={styles.derivedDay}>{frequency === 'Monthly' && derivedOrdinal ? `Every ${derivedOrdinal.toLowerCase()} ${derivedWeekday}` : `Every ${derivedWeekday}`}</div>}</div>
         <div style={styles.formRowHalf}><label style={styles.label}>Start Time</label><input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} style={styles.input} required /></div>
       </div>
       <div style={styles.formRow}><label style={styles.label}>End Date (optional)</label><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={styles.input} /></div>
@@ -1029,9 +1057,17 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
           {SERIES_COLORS.map((c, i) => (
             <button key={i} type="button" onClick={() => setColor(i.toString())} title={c.label} style={{ width: '28px', height: '28px', borderRadius: '6px', background: c.border, border: color === i.toString() ? '2px solid white' : '2px solid transparent', cursor: 'pointer', boxShadow: color === i.toString() ? `0 0 0 2px ${c.border}` : 'none', transition: 'box-shadow 0.15s' }} />
           ))}
+          <div style={{ position: 'relative', width: '28px', height: '28px' }}>
+            <input type="color" value={color.startsWith('#') ? color : '#6366F1'} onChange={e => setColor(e.target.value)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', padding: 0, border: 'none', borderRadius: '6px', cursor: 'pointer', opacity: 0 }} title="Custom color" />
+            <div style={{ width: '28px', height: '28px', borderRadius: '6px', background: color.startsWith('#') ? color : `conic-gradient(from 0deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)`, border: color.startsWith('#') ? '2px solid white' : `1px solid ${theme.border}`, boxShadow: color.startsWith('#') ? `0 0 0 2px ${color}` : 'none', pointerEvents: 'none', transition: 'box-shadow 0.15s' }} />
+          </div>
         </div>
       </div>
       <div style={styles.formRow}><label style={styles.label}>Default Host (optional)</label><select value={defaultHost} onChange={e => setDefaultHost(e.target.value)} style={styles.select}><option value="">No default host</option>{users.map((u: any) => <option key={u.principal.toText()} value={u.principal.toText()}>{u.name}</option>)}</select></div>
+      <div style={{ ...styles.formRow, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div><label style={styles.label}>Exclude from coverage reports</label><div style={{ fontSize: '12px', color: theme.textMuted }}>Hide this series from coverage statistics</div></div>
+        <Toggle checked={excludeFromCoverage} onChange={setExcludeFromCoverage} />
+      </div>
       {previewDates.length > 0 && (
         <div style={styles.previewSection}>
           <div style={styles.previewTitle}>Preview — next {previewDates.length} occurrence{previewDates.length !== 1 ? 's' : ''}</div>
@@ -1050,12 +1086,14 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
 }
 
 function EditSeriesForm({ actor, triggerSessionExpired, series, onSuccess, onCancel }: { actor: any; triggerSessionExpired: () => void; series: EventSeries; onSuccess: () => void; onCancel: () => void }) {
+  const { timezone } = useTimezone();
   const [title, setTitle] = useState(series.title);
   const [notes, setNotes] = useState(series.notes);
   const [endDate, setEndDate] = useState(series.end_date.length > 0 ? nanosToDate(series.end_date[0] as bigint).toISOString().split('T')[0] : '');
   const [duration, setDuration] = useState(series.default_duration_minutes.toString());
   const [color, setColor] = useState(series.color?.[0] || '');
   const [defaultHost, setDefaultHost] = useState(series.default_host?.[0]?.toText() || '');
+  const [excludeFromCoverage, setExcludeFromCoverage] = useState(series.exclude_from_coverage);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1076,11 +1114,12 @@ function EditSeriesForm({ actor, triggerSessionExpired, series, onSuccess, onCan
       const updateInput = {
         title: [title.trim()],
         notes: [notes.trim()],
-        end_date: endDate ? [[dateToNanos(new Date(endDate + 'T23:59:59'))]] : [[]],
+        end_date: endDate ? [[dateToNanos(parseDateTimeInTz(endDate, '23:59', timezone))]] : [[]],
         default_duration_minutes: [parseInt(duration)],
         color: color ? [[color]] : [[]],
         paused: [],
         default_host: defaultHost ? [[Principal.fromText(defaultHost)]] : [[]],
+        exclude_from_coverage: [excludeFromCoverage],
       };
       const result = await actor.update_event_series(series.series_id, updateInput);
       if ('Ok' in result) onSuccess();
@@ -1110,7 +1149,7 @@ function EditSeriesForm({ actor, triggerSessionExpired, series, onSuccess, onCan
       {error && <div style={styles.formError}>{error}</div>}
       <div style={styles.formRow}><label style={styles.label}>Title</label><input type="text" value={title} onChange={e => setTitle(e.target.value)} style={styles.input} required /></div>
       <div style={styles.formRow}><label style={styles.label}>Notes</label><textarea value={notes} onChange={e => setNotes(e.target.value)} style={styles.textarea} /></div>
-      <div style={styles.readOnlyInfo}><strong>Schedule:</strong> Every {weekdayLabel} at {nanosToDate(series.start_date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}<br /><small>Schedule cannot be changed. Delete and recreate if needed.</small></div>
+      <div style={styles.readOnlyInfo}><strong>Schedule:</strong> Every {weekdayLabel} at {nanosToDate(series.start_date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: timezone })}<br /><small>Schedule cannot be changed. Delete and recreate if needed.</small></div>
       <div style={styles.formRowGroup}>
         <div style={styles.formRowHalf}><label style={styles.label}>Duration</label><select value={duration} onChange={e => setDuration(e.target.value)} style={styles.select}><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option></select></div>
         <div style={styles.formRowHalf}><label style={styles.label}>End Date (optional)</label><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={styles.input} /></div>
@@ -1122,9 +1161,17 @@ function EditSeriesForm({ actor, triggerSessionExpired, series, onSuccess, onCan
           {SERIES_COLORS.map((c, i) => (
             <button key={i} type="button" onClick={() => setColor(i.toString())} title={c.label} style={{ width: '28px', height: '28px', borderRadius: '6px', background: c.border, border: color === i.toString() ? '2px solid white' : '2px solid transparent', cursor: 'pointer', boxShadow: color === i.toString() ? `0 0 0 2px ${c.border}` : 'none', transition: 'box-shadow 0.15s' }} />
           ))}
+          <div style={{ position: 'relative', width: '28px', height: '28px' }}>
+            <input type="color" value={color.startsWith('#') ? color : '#6366F1'} onChange={e => setColor(e.target.value)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', padding: 0, border: 'none', borderRadius: '6px', cursor: 'pointer', opacity: 0 }} title="Custom color" />
+            <div style={{ width: '28px', height: '28px', borderRadius: '6px', background: color.startsWith('#') ? color : `conic-gradient(from 0deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)`, border: color.startsWith('#') ? '2px solid white' : `1px solid ${theme.border}`, boxShadow: color.startsWith('#') ? `0 0 0 2px ${color}` : 'none', pointerEvents: 'none', transition: 'box-shadow 0.15s' }} />
+          </div>
         </div>
       </div>
       <div style={styles.formRow}><label style={styles.label}>Default Host</label><select value={defaultHost} onChange={e => setDefaultHost(e.target.value)} style={styles.select}><option value="">No default host</option>{users.map((u: any) => <option key={u.principal.toText()} value={u.principal.toText()}>{u.name}</option>)}</select></div>
+      <div style={{ ...styles.formRow, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div><label style={styles.label}>Exclude from coverage reports</label><div style={{ fontSize: '12px', color: theme.textMuted }}>Hide this series from coverage statistics</div></div>
+        <Toggle checked={excludeFromCoverage} onChange={setExcludeFromCoverage} />
+      </div>
       <div style={styles.formActions}><button type="button" onClick={onCancel} style={styles.cancelBtn}>Cancel</button><button type="submit" disabled={loading} style={styles.submitBtn}>{loading ? 'Saving...' : 'Save Changes'}</button></div>
     </form>
   );
@@ -1208,6 +1255,37 @@ function SystemSettings() {
             <span style={settings.claims_paused ? styles.pausedLabel : styles.activeLabel}>{settings.claims_paused ? 'Paused' : 'Active'}</span>
           </div>
         </div>
+        <div style={styles.settingRow}>
+          <div style={styles.settingInfo}><div style={styles.settingLabel}>Ignore Daylight Savings</div><div style={styles.settingDesc}>Keep events at the same clock time year-round instead of shifting when DST changes</div></div>
+          <div style={styles.settingControl}>
+            <Toggle
+              checked={settings.ignore_dst}
+              onChange={(checked) => setSettings({ ...settings, ignore_dst: checked })}
+            />
+            <span style={settings.ignore_dst ? styles.pausedLabel : styles.activeLabel}>{settings.ignore_dst ? 'Ignoring DST' : 'DST Active'}</span>
+          </div>
+        </div>
+        {settings.ignore_dst && (
+          <div style={styles.settingRow}>
+            <div style={styles.settingInfo}><div style={styles.settingLabel}>Standard Timezone</div><div style={styles.settingDesc}>Select your timezone's standard (non-DST) UTC offset</div></div>
+            <div style={styles.settingControl}>
+              <select
+                value={settings.dst_utc_offset_minutes?.[0] ?? ''}
+                onChange={e => {
+                  const val = e.target.value;
+                  setSettings({ ...settings, dst_utc_offset_minutes: val ? [parseInt(val)] : [] });
+                }}
+                style={styles.numberInput}
+              >
+                <option value="">Select...</option>
+                <option value="-300">Eastern (UTC-5)</option>
+                <option value="-360">Central (UTC-6)</option>
+                <option value="-420">Mountain (UTC-7)</option>
+                <option value="-480">Pacific (UTC-8)</option>
+              </select>
+            </div>
+          </div>
+        )}
         <button style={styles.submitBtn} onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Settings'}</button>
       </div>
 
@@ -1227,166 +1305,6 @@ function SystemSettings() {
           <div style={{ flex: 1 }}><input type="text" value={settings.org_logo_url?.[0] || ''} onChange={e => setSettings({ ...settings, org_logo_url: e.target.value ? [e.target.value] : [] })} placeholder="https://..." style={styles.textInput} /></div>
         </div>
         <button style={styles.submitBtn} onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Organization'}</button>
-      </div>
-    </div>
-  );
-}
-
-// ============== REPORTS ==============
-function Reports() {
-  const { actor, loading: actorLoading, triggerSessionExpired } = useBackend();
-  const [events, setEvents] = useState<any[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [coverageHistory, setCoverageHistory] = useState<CoverageStats[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!actor || actorLoading) return;
-    async function fetchData() {
-      setLoading(true);
-      try {
-        const now = new Date();
-        const start = dateToNanos(now);
-        const end = dateToNanos(new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000));
-        const [eventsResult, usersResult, historyResult] = await Promise.all([
-          actor.list_events(start, end),
-          actor.list_users(),
-          actor.get_coverage_history(6),
-        ]);
-        if ('Ok' in eventsResult) setEvents(eventsResult.Ok);
-        if ('Ok' in usersResult) setUsers(usersResult.Ok);
-        if ('Ok' in historyResult) setCoverageHistory(historyResult.Ok);
-      } catch (err) {
-        if (isSessionExpiredError(err)) {
-          triggerSessionExpired();
-          setError('Your session has expired. Please sign in again.');
-        } else {
-          console.error('Failed to fetch report data:', err);
-        }
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchData();
-  }, [actor, actorLoading]);
-
-  if (actorLoading || loading) return <div style={styles.loading}>Loading report data...</div>;
-  if (error) return <div style={styles.error}>{error}</div>;
-
-  const totalEvents = events.length;
-  const assignedEvents = events.filter(e => e.host_principal.length > 0).length;
-  const needsHostEvents = totalEvents - assignedEvents;
-  const coverageRate = totalEvents > 0 ? Math.round((assignedEvents / totalEvents) * 100) : 0;
-
-  const hostCounts: Record<string, { name: string; count: number }> = {};
-  // Initialize all active users with 0 count
-  users.filter(u => 'Active' in u.status).forEach(u => {
-    hostCounts[u.principal.toText()] = { name: u.name, count: 0 };
-  });
-  events.forEach(e => {
-    if (e.host_principal.length > 0) {
-      const principal = e.host_principal[0].toText();
-      if (!hostCounts[principal]) {
-        const user = users.find(u => u.principal.toText() === principal);
-        hostCounts[principal] = { name: user?.name || 'Unknown', count: 0 };
-      }
-      hostCounts[principal].count++;
-    }
-  });
-  const sortedHosts = Object.values(hostCounts).sort((a, b) => b.count - a.count);
-  const maxCount = sortedHosts.length > 0 ? Math.max(sortedHosts[0].count, 1) : 1;
-
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <div>
-          <h3 style={styles.sectionTitle}>Coverage Reports</h3>
-          <p style={{ ...styles.reportSubtitle, marginBottom: 0 }}>Next 60 days</p>
-        </div>
-        <button style={styles.addBtn} onClick={async () => {
-          if (!actor) return;
-          try {
-            const now = new Date();
-            const start = dateToNanos(now);
-            const end = dateToNanos(new Date(now.getTime() + 60 * 24 * 60 * 60 * 1000));
-            const result = await actor.export_events_csv(start, end);
-            if ('Ok' in result) {
-              const blob = new Blob([result.Ok], { type: 'text/csv' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `office-hours-export-${now.toISOString().split('T')[0]}.csv`;
-              a.click();
-              URL.revokeObjectURL(url);
-            }
-          } catch (err) { console.error('CSV export failed', err); }
-        }}>Export CSV</button>
-      </div>
-      <div style={styles.statsGrid}>
-        <div style={styles.statCard}><div style={styles.statValue}>{totalEvents}</div><div style={styles.statLabel}>Total Sessions</div></div>
-        <div style={styles.statCard}><div style={{ ...styles.statValue, color: theme.accent }}>{assignedEvents}</div><div style={styles.statLabel}>Assigned</div></div>
-        <div style={styles.statCard}><div style={{ ...styles.statValue, color: '#F87171' }}>{needsHostEvents}</div><div style={styles.statLabel}>Needs Host</div></div>
-        <div style={styles.statCard}><div style={styles.statValue}>{coverageRate}%</div><div style={styles.statLabel}>Coverage Rate</div></div>
-      </div>
-      <h4 style={styles.reportSectionTitle}>Host Distribution</h4>
-      {sortedHosts.length === 0 ? <p style={styles.noData}>No hosting data yet.</p> : (
-        <div style={styles.hostList}>
-          {sortedHosts.map(host => (
-            <div key={host.name} style={styles.hostRow}>
-              <span style={styles.hostName}>{host.name}</span>
-              <div style={styles.hostBar}><div style={{ ...styles.hostBarFill, width: `${(host.count / maxCount) * 100}%` }} /></div>
-              <span style={styles.hostCount}>{host.count}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Historical Coverage */}
-      {coverageHistory.length > 0 && (
-        <>
-          <h4 style={{ ...styles.reportSectionTitle, marginTop: '32px' }}>Coverage History</h4>
-          <p style={styles.reportSubtitle}>Monthly coverage rate (last 6 months)</p>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', height: '160px', marginBottom: '24px' }}>
-            {coverageHistory.map((m, i) => {
-              const rate = m.total_sessions > 0 ? Math.round((m.assigned / m.total_sessions) * 100) : 0;
-              return (
-                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: theme.textPrimary }}>{rate}%</span>
-                  <div style={{ width: '100%', background: theme.surfaceElevated, borderRadius: '6px', height: '120px', position: 'relative', overflow: 'hidden' }}>
-                    <div style={{ position: 'absolute', bottom: 0, width: '100%', height: `${rate}%`, background: rate >= 80 ? theme.accent : rate >= 50 ? '#FBBF24' : '#F87171', borderRadius: '6px', transition: 'height 0.5s ease' }} />
-                  </div>
-                  <span style={{ fontSize: '11px', color: theme.textMuted }}>{m.period_label}</span>
-                  <span style={{ fontSize: '10px', color: theme.textMuted }}>{m.assigned}/{m.total_sessions}</span>
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
-
-      <h4 style={{ ...styles.reportSectionTitle, marginTop: '32px' }}>System Info</h4>
-      <div style={styles.systemInfo}>
-        <div style={styles.systemRow}>
-          <span style={styles.systemLabel}>Frontend Canister</span>
-          <code style={styles.systemValue}>{import.meta.env.VITE_FRONTEND_CANISTER_ID || '6sm6t-iiaaa-aaaad-aebwq-cai'}</code>
-        </div>
-        <div style={styles.systemRow}>
-          <span style={styles.systemLabel}>Backend Canister</span>
-          <code style={styles.systemValue}>{import.meta.env.VITE_BACKEND_CANISTER_ID || '6vnyh-fqaaa-aaaad-aebwa-cai'}</code>
-        </div>
-        <div style={styles.systemRow}>
-          <span style={styles.systemLabel}>Network</span>
-          <code style={styles.systemValue}>{import.meta.env.VITE_DFX_NETWORK || 'local'}</code>
-        </div>
-        <div style={styles.systemRow}>
-          <span style={styles.systemLabel}>Active Users</span>
-          <span style={styles.systemValue}>{users.filter(u => 'Active' in u.status).length}</span>
-        </div>
-        <div style={styles.systemRow}>
-          <span style={styles.systemLabel}>CycleOps Dashboard</span>
-          <a href="https://cycleops.dev" target="_blank" rel="noopener noreferrer" style={{ color: theme.accent, fontSize: '13px' }}>View cycle balance →</a>
-        </div>
       </div>
     </div>
   );
@@ -1470,19 +1388,6 @@ const styles: { [key: string]: React.CSSProperties } = {
   checkbox: { width: '18px', height: '18px', accentColor: theme.accent },
   pausedLabel: { color: '#F87171', fontWeight: 500, fontSize: '14px' },
   activeLabel: { color: '#34D399', fontWeight: 500, fontSize: '14px' },
-  reportSubtitle: { color: theme.textMuted, marginTop: '4px', marginBottom: '16px', fontSize: '14px' },
-  reportSectionTitle: { marginTop: '32px', marginBottom: '16px', fontSize: '16px', color: theme.textPrimary, fontWeight: 600 },
-  statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' },
-  statCard: { background: theme.surfaceElevated, borderRadius: '10px', padding: '20px', textAlign: 'center' as const, border: `1px solid ${theme.border}` },
-  statValue: { fontSize: '32px', fontWeight: 700, color: theme.textPrimary },
-  statLabel: { fontSize: '13px', color: theme.textMuted, marginTop: '4px' },
-  noData: { color: theme.textMuted, fontStyle: 'italic' },
-  hostList: { display: 'flex', flexDirection: 'column', gap: '12px' },
-  hostRow: { display: 'flex', alignItems: 'center', gap: '16px' },
-  hostName: { width: '120px', fontSize: '14px', fontWeight: 500, color: theme.textPrimary },
-  hostBar: { flex: 1, height: '24px', background: theme.bg, borderRadius: '4px', overflow: 'hidden' },
-  hostBarFill: { height: '100%', background: theme.accent, borderRadius: '4px', transition: 'width 0.3s' },
-  hostCount: { width: '40px', textAlign: 'right' as const, fontSize: '14px', fontWeight: 600, color: theme.textPrimary },
   // Pending user styles
   pendingText: { fontSize: '11px', color: '#FBBF24', fontStyle: 'italic' },
   pendingBadge: { background: 'rgba(251, 191, 36, 0.15)', color: '#FBBF24', padding: '3px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 500 },
@@ -1501,11 +1406,6 @@ const styles: { [key: string]: React.CSSProperties } = {
   // Action group styles
   actionGroup: { display: 'flex', gap: '4px', alignItems: 'center' },
   deleteBtn: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '30px', height: '30px', background: 'transparent', color: '#F87171', border: '1px solid rgba(248, 113, 113, 0.3)', borderRadius: '6px', cursor: 'pointer', transition: 'all 150ms ease-out' },
-  // System info
-  systemInfo: { background: theme.surfaceElevated, borderRadius: '10px', padding: '4px 0', border: `1px solid ${theme.border}` },
-  systemRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', borderBottom: `1px solid ${theme.border}` },
-  systemLabel: { fontSize: '13px', color: theme.textMuted, fontWeight: 500 },
-  systemValue: { fontSize: '13px', color: theme.textSecondary, fontFamily: 'monospace' },
   // Preview
   previewSection: { margin: '16px 0', padding: '12px 16px', background: theme.surfaceElevated, borderRadius: '8px', border: `1px solid ${theme.border}` },
   previewTitle: { fontSize: '11px', fontWeight: 700, color: theme.textMuted, textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: '8px' },

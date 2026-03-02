@@ -27,7 +27,14 @@ import { theme } from '../theme';
     'InvalidInput': IDL.Text, 'Conflict': IDL.Text, 'InternalError': IDL.Text,
   });
   const Result_User = IDL.Variant({ 'Ok': User, 'Err': ApiError });
+  const InviteCodeInfo = IDL.Record({
+    'is_personal': IDL.Bool,
+    'prefilled_name': IDL.Opt(IDL.Text),
+    'prefilled_email': IDL.Opt(IDL.Text),
+  });
+  const Result_InviteCodeInfo = IDL.Variant({ 'Ok': InviteCodeInfo, 'Err': ApiError });
   return IDL.Service({
+    'check_invite_code': IDL.Func([IDL.Text], [Result_InviteCodeInfo], ['query']),
     'redeem_invite_code': IDL.Func([IDL.Text, IDL.Text, IDL.Text], [Result_User], []),
   });
 };
@@ -50,7 +57,9 @@ export default function NotAuthorized() {
   const [seg2, setSeg2] = useState('');
   const [userName, setUserName] = useState('');
   const [userEmail, setUserEmail] = useState('');
-  
+  const [isPersonal, setIsPersonal] = useState(false);
+  const [checkingCode, setCheckingCode] = useState(false);
+
   const principalText = principal?.toText() || 'Unknown';
   
   const copyToClipboard = async () => {
@@ -99,7 +108,54 @@ export default function NotAuthorized() {
   };
 
   const fullCode = seg1.length === 4 && seg2.length === 4 ? `YS-${seg1}-${seg2}` : '';
-  const canRedeem = !!fullCode && userName.trim().length > 0 && userEmail.trim().includes('@');
+
+  // Check if the invite code is personal (pre-created user) when fully entered
+  useEffect(() => {
+    if (!fullCode) {
+      setIsPersonal(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setCheckingCode(true);
+      try {
+        const host = import.meta.env.VITE_DFX_NETWORK === 'ic'
+          ? 'https://icp-api.io'
+          : 'http://localhost:4943';
+        const agent = await HttpAgent.create({ host });
+        if (import.meta.env.VITE_DFX_NETWORK !== 'ic') {
+          await agent.fetchRootKey();
+        }
+        const actor = Actor.createActor(redeemIdlFactory, { agent, canisterId: BACKEND_CANISTER_ID });
+        const result: any = await actor.check_invite_code(fullCode);
+        if (cancelled) return;
+        if ('Ok' in result) {
+          const info = result.Ok;
+          if (info.is_personal) {
+            setIsPersonal(true);
+            if (info.prefilled_name?.[0]) setUserName(info.prefilled_name[0]);
+            if (info.prefilled_email?.[0]) setUserEmail(info.prefilled_email[0]);
+          } else {
+            setIsPersonal(false);
+          }
+          setRedeemError(null);
+        } else if ('Err' in result) {
+          const err = result.Err;
+          if ('InvalidInput' in err) setRedeemError(err.InvalidInput);
+          else setRedeemError('Invalid invite code.');
+          setIsPersonal(false);
+        }
+      } catch {
+        // Network error — don't block, let them try to redeem
+        if (!cancelled) setIsPersonal(false);
+      } finally {
+        if (!cancelled) setCheckingCode(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [fullCode]);
+
+  const canRedeem = !!fullCode && !checkingCode && (isPersonal || (userName.trim().length > 0 && userEmail.trim().includes('@')));
 
   const handleRedeem = async () => {
     if (!canRedeem) return;
@@ -237,7 +293,18 @@ export default function NotAuthorized() {
             </div>
           )}
 
-          {fullCode && (
+          {fullCode && checkingCode && (
+            <div style={{ color: theme.textMuted, fontSize: '13px', marginBottom: '8px' }}>Checking code...</div>
+          )}
+
+          {fullCode && !checkingCode && isPersonal && userName && (
+            <div style={{ ...styles.nameEmailGroup, background: theme.surfaceElevated, padding: '12px 16px', borderRadius: '10px', border: `1px solid ${theme.border}` }}>
+              <div style={{ fontSize: '14px', color: theme.textPrimary, fontWeight: 500 }}>Welcome, {userName}!</div>
+              {userEmail && <div style={{ fontSize: '13px', color: theme.textMuted }}>{userEmail}</div>}
+            </div>
+          )}
+
+          {fullCode && !checkingCode && !isPersonal && (
             <div style={styles.nameEmailGroup}>
               <input
                 type="text"

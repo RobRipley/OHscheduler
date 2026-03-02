@@ -60,6 +60,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'color': IDL.Opt(IDL.Text),
     'paused': IDL.Bool,
     'default_host': IDL.Opt(IDL.Principal),
+    'exclude_from_coverage': IDL.Bool,
     'created_at': IDL.Nat64,
     'created_by': IDL.Principal,
   });
@@ -76,7 +77,9 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'host_principal': IDL.Opt(IDL.Principal),
     'status': EventStatus,
     'color': IDL.Opt(IDL.Text),
+    'exclude_from_coverage': IDL.Bool,
     'created_at': IDL.Nat64,
+    'occurrence_start_utc': IDL.Opt(IDL.Nat64),
   });
 
   const GlobalSettings = IDL.Record({
@@ -86,6 +89,8 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'org_name': IDL.Opt(IDL.Text),
     'org_tagline': IDL.Opt(IDL.Text),
     'org_logo_url': IDL.Opt(IDL.Text),
+    'ignore_dst': IDL.Bool,
+    'dst_utc_offset_minutes': IDL.Opt(IDL.Int16),
   });
 
   const CoverageStats = IDL.Record({
@@ -117,6 +122,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'default_duration_minutes': IDL.Opt(IDL.Nat32),
     'color': IDL.Opt(IDL.Text),
     'default_host': IDL.Opt(IDL.Principal),
+    'exclude_from_coverage': IDL.Opt(IDL.Bool),
   });
 
 
@@ -128,6 +134,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'color': IDL.Opt(IDL.Opt(IDL.Text)),
     'paused': IDL.Opt(IDL.Bool),
     'default_host': IDL.Opt(IDL.Opt(IDL.Principal)),
+    'exclude_from_coverage': IDL.Opt(IDL.Bool),
   });
 
   const ApiError = IDL.Variant({
@@ -212,8 +219,13 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
       []
     ),
     'unassign_host': IDL.Func(
-      [IDL.Opt(IDL.Vec(IDL.Nat8)), IDL.Opt(IDL.Nat64), IDL.Vec(IDL.Nat8)], 
-      [Result_EventInstance], 
+      [IDL.Opt(IDL.Vec(IDL.Nat8)), IDL.Opt(IDL.Nat64), IDL.Vec(IDL.Nat8)],
+      [Result_EventInstance],
+      []
+    ),
+    'cancel_instance': IDL.Func(
+      [IDL.Vec(IDL.Nat8), IDL.Nat64, IDL.Vec(IDL.Nat8)],
+      [Result_EventInstance],
       []
     ),
 
@@ -282,7 +294,9 @@ export interface EventInstance {
   host_principal: [Principal] | [];
   status: { Active: null } | { Cancelled: null };
   color: [string] | [];
+  exclude_from_coverage: boolean;
   created_at: bigint;
+  occurrence_start_utc: [bigint] | [];
 }
 
 
@@ -300,6 +314,7 @@ export interface EventSeries {
   color: [string] | [];
   paused: boolean;
   default_host: [Principal] | [];
+  exclude_from_coverage: boolean;
   created_at: bigint;
   created_by: Principal;
 }
@@ -311,6 +326,8 @@ export interface GlobalSettings {
   org_name: string[];
   org_tagline: string[];
   org_logo_url: string[];
+  ignore_dst: boolean;
+  dst_utc_offset_minutes: number[];
 }
 
 export interface CoverageStats {
@@ -345,6 +362,7 @@ export interface CreateSeriesInput {
   default_duration_minutes: [number] | [];
   color: [string] | [];
   default_host: [Principal] | [];
+  exclude_from_coverage: [boolean] | [];
 }
 
 

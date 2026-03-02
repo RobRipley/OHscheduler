@@ -142,9 +142,11 @@ export default function PublicCalendar() {
         
         const start = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
         const end = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0, 23, 59, 59, 999);
-        
-        const startNanos = BigInt(start.getTime()) * BigInt(1_000_000);
-        const endNanos = BigInt(end.getTime()) * BigInt(1_000_000);
+
+        // Pad by ±1 day to ensure events near timezone boundaries are always fetched
+        const dayMs = 24 * 60 * 60 * 1000;
+        const startNanos = BigInt(start.getTime() - dayMs) * BigInt(1_000_000);
+        const endNanos = BigInt(end.getTime() + dayMs) * BigInt(1_000_000);
         
         const result = await actor.list_events_public(startNanos, endNanos) as PublicEvent[];
         setEvents(result);
@@ -386,7 +388,7 @@ export default function PublicCalendar() {
             {calendarGrid.map((week, weekIdx) => (
               <div key={weekIdx} style={styles.weekRow}>
                 {week.map(date => {
-                  const dateKey = date.toISOString().split('T')[0];
+                  const dateKey = getDateKeyInTz(BigInt(date.getTime()) * BigInt(1_000_000));
                   const dayEvents = eventsByDate.get(dateKey) || [];
                   const isToday = dateKey === todayKey;
                   const inMonth = isCurrentMonth(date);

@@ -76,6 +76,34 @@ export const COMMON_TIMEZONES = TIMEZONE_LIST.map(t => t.tz);
 
 // ==================== HELPERS ====================
 
+/**
+ * Parse a date string + time string as a specific IANA timezone and return a UTC Date.
+ * Example: parseDateTimeInTz('2024-03-15', '14:00', 'America/Los_Angeles')
+ * → Date representing 14:00 PDT = 21:00 UTC
+ */
+export function parseDateTimeInTz(dateStr: string, timeStr: string, tz: string): Date {
+  // Step 1: treat the date/time as if it were UTC
+  const naiveUtc = new Date(`${dateStr}T${timeStr}:00.000Z`);
+
+  // Step 2: see what that UTC instant looks like in the target timezone
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    year: 'numeric', month: 'numeric', day: 'numeric',
+    hour: 'numeric', minute: 'numeric', second: 'numeric',
+    hour12: false,
+  }).formatToParts(naiveUtc);
+  const g = (type: string) => parseInt(parts.find(p => p.type === type)?.value || '0');
+  let tzHour = g('hour');
+  if (tzHour === 24) tzHour = 0; // some browsers return 24 for midnight
+  const tzAsUtc = Date.UTC(g('year'), g('month') - 1, g('day'), tzHour, g('minute'), g('second'));
+
+  // Step 3: the offset is how far the TZ representation is from the UTC input
+  const offsetMs = tzAsUtc - naiveUtc.getTime();
+
+  // Step 4: shift to get real UTC: if LA is UTC-7, offset is -7h, real = naive - (-7h) = naive + 7h
+  return new Date(naiveUtc.getTime() - offsetMs);
+}
+
 export function getTimezoneAbbrev(tz: string, date: Date = new Date()): string {
   try {
     const parts = new Intl.DateTimeFormat('en-US', {

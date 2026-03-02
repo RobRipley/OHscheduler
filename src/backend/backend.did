@@ -61,6 +61,7 @@ type EventSeries = record {
     color: opt text;
     paused: bool;
     default_host: opt principal;
+    exclude_from_coverage: bool;
     created_at: nat64;
     created_by: principal;
 };
@@ -76,13 +77,20 @@ type EventInstance = record {
     host_principal: opt principal;
     status: EventStatus;
     color: opt text;
+    exclude_from_coverage: bool;
     created_at: nat64;
+    occurrence_start_utc: opt nat64;
 };
 
 type GlobalSettings = record {
     forward_window_months: nat8;
     claims_paused: bool;
     default_event_duration_minutes: nat32;
+    org_name: opt text;
+    org_tagline: opt text;
+    org_logo_url: opt text;
+    ignore_dst: bool;
+    dst_utc_offset_minutes: opt int16;
 };
 
 type NotificationJob = record {
@@ -130,6 +138,7 @@ type CreateSeriesInput = record {
     default_duration_minutes: opt nat32;
     color: opt text;
     default_host: opt principal;
+    exclude_from_coverage: opt bool;
 };
 
 type UpdateSeriesInput = record {
@@ -140,6 +149,7 @@ type UpdateSeriesInput = record {
     color: opt opt text;
     paused: opt bool;
     default_host: opt opt principal;
+    exclude_from_coverage: opt bool;
 };
 
 type ApiError = variant {
@@ -183,6 +193,13 @@ type Result_String = variant { Ok: text; Err: ApiError };
 type Result_InviteCode = variant { Ok: InviteCode; Err: ApiError };
 type Result_Vec_InviteCode = variant { Ok: vec InviteCode; Err: ApiError };
 
+type InviteCodeInfo = record {
+    is_personal : bool;
+    prefilled_name : opt text;
+    prefilled_email : opt text;
+};
+type Result_InviteCodeInfo = variant { Ok: InviteCodeInfo; Err: ApiError };
+
 service : {
     // Auth / User
     get_current_user : () -> (Result_User) query;
@@ -217,6 +234,7 @@ service : {
     // Coverage Queue
     assign_host : (opt blob, opt nat64, blob, principal) -> (Result_EventInstance);
     unassign_host : (opt blob, opt nat64, blob) -> (Result_EventInstance);
+    cancel_instance : (blob, nat64, blob) -> (Result_EventInstance);
 
     // Admin - System
     update_global_settings : (GlobalSettings) -> (Result_Unit);
@@ -230,6 +248,7 @@ service : {
     // Invite Codes
     generate_invite_code : (Role) -> (Result_InviteCode);
     generate_personal_invite_code : (principal) -> (Result_InviteCode);
+    check_invite_code : (text) -> (Result_InviteCodeInfo) query;
     redeem_invite_code : (text, text, text) -> (Result_User);
     list_invite_codes : () -> (Result_Vec_InviteCode) query;
 }

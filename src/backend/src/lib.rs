@@ -284,7 +284,9 @@ fn create_one_off_event(input: CreateEventInput) -> ApiResult<EventInstance> {
         host_principal: input.host_principal,
         status: EventStatus::Active,
         color: None,
+        exclude_from_coverage: false,
         created_at: now,
+        occurrence_start_utc: None,
     };
     
     storage::insert_instance(instance.clone());
@@ -324,6 +326,7 @@ fn create_event_series(input: CreateSeriesInput) -> ApiResult<EventSeries> {
             .unwrap_or(settings.default_event_duration_minutes),
         color: input.color,
         paused: false,
+        exclude_from_coverage: input.exclude_from_coverage.unwrap_or(false),
         default_host: input.default_host,
         created_at: now,
         created_by: admin.principal,
@@ -365,7 +368,10 @@ fn update_event_series(series_id: Vec<u8>, input: UpdateSeriesInput) -> ApiResul
     if let Some(default_host) = input.default_host {
         series.default_host = default_host;
     }
-    
+    if let Some(exclude) = input.exclude_from_coverage {
+        series.exclude_from_coverage = exclude;
+    }
+
     storage::insert_series(series.clone());
     Ok(series)
 }
@@ -430,6 +436,24 @@ fn assign_host(
     )
 }
 
+/// Cancel a single instance of a recurring series (admin only)
+#[update]
+fn cancel_instance(
+    series_id: Vec<u8>,
+    occurrence_start: u64,
+    instance_id: Vec<u8>,
+) -> ApiResult<EventInstance> {
+    let admin = auth::require_admin()?;
+
+    let sid: [u8; 16] = series_id.try_into()
+        .map_err(|_| ApiError::InvalidInput("Invalid series_id".to_string()))?;
+
+    let iid: [u8; 16] = instance_id.try_into()
+        .map_err(|_| ApiError::InvalidInput("Invalid instance_id".to_string()))?;
+
+    coverage::cancel_instance(sid, occurrence_start, iid, admin.principal)
+}
+
 /// Unassign host from an event instance
 #[update]
 fn unassign_host(
@@ -483,14 +507,15 @@ fn get_org_settings() -> GlobalSettings {
 /// Get coverage history for past N months (admin only)
 #[query]
 fn get_coverage_history(months_back: u8) -> ApiResult<Vec<CoverageStats>> {
-    auth::require_admin()?;
-    
+    auth::require_authorized()?;
+
     let now = ic_cdk::api::time();
     let mut stats = Vec::new();
-    
+
     for i in 0..months_back {
         let (window_start, window_end, label) = recurrence::month_window(now, i);
-        let events = recurrence::materialize_events(window_start, window_end);
+        let events: Vec<_> = recurrence::materialize_events(window_start, window_end)
+            .into_iter().filter(|e| !e.exclude_from_coverage).collect();
         let total = events.len() as u32;
         let assigned = events.iter().filter(|e| e.host_principal.is_some()).count() as u32;
         let unassigned = total - assigned;
@@ -528,9 +553,10 @@ fn toggle_series_pause(series_id: Vec<u8>) -> ApiResult<EventSeries> {
 /// Export events as CSV (admin only)
 #[query]
 fn export_events_csv(window_start: u64, window_end: u64) -> ApiResult<String> {
-    auth::require_admin()?;
-    
-    let events = recurrence::materialize_events(window_start, window_end);
+    auth::require_authorized()?;
+
+    let events: Vec<_> = recurrence::materialize_events(window_start, window_end)
+        .into_iter().filter(|e| !e.exclude_from_coverage).collect();
     let users = storage::list_all_users();
     
     let mut csv = String::from("Date,Time (UTC),Title,Host,Status,Series,Duration (min)\n");
@@ -720,6 +746,40 @@ async fn generate_personal_invite_code(placeholder_principal: Principal) -> ApiR
     
     storage::insert_invite_code(invite.clone());
     Ok(invite)
+}
+
+/// Check an invite code without redeeming it.
+/// Returns whether the code is personal (has a pre-created user with name/email).
+/// No auth required since the person checking hasn't been authorized yet.
+#[query]
+fn check_invite_code(code: String) -> ApiResult<InviteCodeInfo> {
+    let code_upper = code.trim().to_uppercase();
+    let invite = storage::get_invite_code(&code_upper)
+        .ok_or(ApiError::InvalidInput("Invalid invite code.".to_string()))?;
+
+    let now = ic_cdk::api::time();
+    if invite.redeemed {
+        return Err(ApiError::InvalidInput("This invite code has already been used.".to_string()));
+    }
+    if invite.expires_at < now {
+        return Err(ApiError::InvalidInput("This invite code has expired.".to_string()));
+    }
+
+    let (is_personal, prefilled_name, prefilled_email) = if let Some(placeholder) = invite.user_placeholder_principal {
+        if let Some(user) = storage::get_user(&placeholder) {
+            (true, Some(user.name), Some(user.email))
+        } else {
+            (true, None, None)
+        }
+    } else {
+        (false, None, None)
+    };
+
+    Ok(InviteCodeInfo {
+        is_personal,
+        prefilled_name,
+        prefilled_email,
+    })
 }
 
 /// Redeem an invite code.
