@@ -945,6 +945,20 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
   const derivedWeekday = startDate ? new Date(startDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long' }) : null;
   const weekdayMap: Record<string, string> = { Sunday: 'Sun', Monday: 'Mon', Tuesday: 'Tue', Wednesday: 'Wed', Thursday: 'Thu', Friday: 'Fri', Saturday: 'Sat' };
 
+  // Compute weekday ordinal for Monthly frequency (e.g., "1st Tuesday")
+  const derivedOrdinal = useMemo(() => {
+    if (!startDate || frequency !== 'Monthly') return null;
+    const d = new Date(startDate + 'T12:00:00');
+    const dayOfMonth = d.getDate();
+    const ordinalIndex = Math.ceil(dayOfMonth / 7); // 1-based: 1st, 2nd, 3rd, 4th
+    // Check if this is the last occurrence of this weekday in the month
+    const nextWeek = new Date(d);
+    nextWeek.setDate(d.getDate() + 7);
+    const isLast = nextWeek.getMonth() !== d.getMonth();
+    const ordinalNames = ['First', 'Second', 'Third', 'Fourth'];
+    return isLast && ordinalIndex >= 4 ? 'Last' : ordinalNames[ordinalIndex - 1] || 'Fourth';
+  }, [startDate, frequency]);
+
   // Preview next 5 occurrences
   const previewDates = useMemo(() => {
     if (!startDate || !startTime) return [];
@@ -954,12 +968,23 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
     const intervalDays = frequency === 'Weekly' ? 7 : frequency === 'Biweekly' ? 14 : 0;
     const end = endDate ? new Date(endDate + 'T23:59:59') : null;
     let current = new Date(start);
-    for (let i = 0; i < 5 && (intervalDays > 0); i++) {
+    for (let i = 0; i < 5; i++) {
       if (end && current > end) break;
       dates.push(new Date(current));
       if (frequency === 'Monthly') {
-        current = new Date(current);
-        current.setMonth(current.getMonth() + 1);
+        // Advance to same weekday ordinal in next month
+        const targetDay = start.getDay();
+        const ordIdx = Math.ceil(start.getDate() / 7);
+        const nextMonth = new Date(current);
+        nextMonth.setMonth(nextMonth.getMonth() + 1, 1); // 1st of next month
+        // Find the nth occurrence of targetDay
+        const firstDayOfMonth = nextMonth.getDay();
+        let firstOccurrence = 1 + ((targetDay - firstDayOfMonth + 7) % 7);
+        let nthOccurrence = firstOccurrence + (ordIdx - 1) * 7;
+        // If it overflows the month, use the last occurrence
+        const daysInMonth = new Date(nextMonth.getFullYear(), nextMonth.getMonth() + 1, 0).getDate();
+        if (nthOccurrence > daysInMonth) nthOccurrence -= 7;
+        current = new Date(nextMonth.getFullYear(), nextMonth.getMonth(), nthOccurrence, start.getHours(), start.getMinutes());
       } else {
         current = new Date(current.getTime() + intervalDays * 24 * 60 * 60 * 1000);
       }
@@ -983,7 +1008,7 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
         link: link.trim() ? [link.trim()] : [],
         frequency: frequencyVariants[frequency],
         weekday: weekdayVariants[weekdayKey],
-        weekday_ordinal: [],
+        weekday_ordinal: derivedOrdinal ? [{ [derivedOrdinal]: null } as any] : [],
         start_date: dateToNanos(startDateTime),
         end_date: endDate ? [dateToNanos(new Date(endDate + 'T23:59:59'))] : [],
         default_duration_minutes: duration ? [parseInt(duration)] : [],
@@ -1018,7 +1043,7 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
         <div style={styles.formRowHalf}><label style={styles.label}>Duration</label><select value={duration} onChange={e => setDuration(e.target.value)} style={styles.select}><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option></select></div>
       </div>
       <div style={styles.formRowGroup}>
-        <div style={styles.formRowHalf}><label style={styles.label}>First Session Date</label><input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={styles.input} required />{derivedWeekday && <div style={styles.derivedDay}>Every {derivedWeekday}</div>}</div>
+        <div style={styles.formRowHalf}><label style={styles.label}>First Session Date</label><input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={styles.input} required />{derivedWeekday && <div style={styles.derivedDay}>{frequency === 'Monthly' && derivedOrdinal ? `Every ${derivedOrdinal.toLowerCase()} ${derivedWeekday}` : `Every ${derivedWeekday}`}</div>}</div>
         <div style={styles.formRowHalf}><label style={styles.label}>Start Time</label><input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} style={styles.input} required /></div>
       </div>
       <div style={styles.formRow}><label style={styles.label}>End Date (optional)</label><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={styles.input} /></div>
