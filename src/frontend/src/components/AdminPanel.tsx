@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Routes, Route, NavLink } from 'react-router-dom';
 import { useBackend, User, EventSeries, GlobalSettings, InviteCode, nanosToDate, bytesToHex, dateToNanos, CreateSeriesInput, isSessionExpiredError } from '../hooks/useBackend';
 import { useAuth } from '../hooks/useAuth';
+import { useTimezone, parseDateTimeInTz } from '../hooks/useTimezone';
 import { Principal } from '@dfinity/principal';
 import { useConfirm, Toggle, Modal, Button, SkeletonTable } from './ui';
 import { theme } from '../theme';
@@ -920,6 +921,7 @@ function EventSeriesManagement() {
 }
 
 function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { actor: any; triggerSessionExpired: () => void; onSuccess: () => void; onCancel: () => void }) {
+  const { timezone } = useTimezone();
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
   const [link, setLink] = useState('');
@@ -942,14 +944,15 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
     }).catch(() => {});
   }, [actor]);
 
-  const derivedWeekday = startDate ? new Date(startDate + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long' }) : null;
+  const derivedWeekday = startDate ? parseDateTimeInTz(startDate, '12:00', timezone).toLocaleDateString('en-US', { weekday: 'long', timeZone: timezone }) : null;
   const weekdayMap: Record<string, string> = { Sunday: 'Sun', Monday: 'Mon', Tuesday: 'Tue', Wednesday: 'Wed', Thursday: 'Thu', Friday: 'Fri', Saturday: 'Sat' };
 
   // Compute weekday ordinal for Monthly frequency (e.g., "1st Tuesday")
   const derivedOrdinal = useMemo(() => {
     if (!startDate || frequency !== 'Monthly') return null;
-    const d = new Date(startDate + 'T12:00:00');
-    const dayOfMonth = d.getDate();
+    const d = parseDateTimeInTz(startDate, '12:00', timezone);
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: timezone, day: 'numeric' }).formatToParts(d);
+    const dayOfMonth = parseInt(parts.find(p => p.type === 'day')?.value || '1');
     const ordinalIndex = Math.ceil(dayOfMonth / 7); // 1-based: 1st, 2nd, 3rd, 4th
     // Check if this is the last occurrence of this weekday in the month
     const nextWeek = new Date(d);
@@ -1001,7 +1004,7 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
       const weekdayKey = weekdayMap[derivedWeekday];
       const weekdayVariants: Record<string, any> = { Mon: { Mon: null }, Tue: { Tue: null }, Wed: { Wed: null }, Thu: { Thu: null }, Fri: { Fri: null }, Sat: { Sat: null }, Sun: { Sun: null } };
       const frequencyVariants: Record<string, any> = { Weekly: { Weekly: null }, Biweekly: { Biweekly: null }, Monthly: { Monthly: null } };
-      const startDateTime = new Date(`${startDate}T${startTime}:00`);
+      const startDateTime = parseDateTimeInTz(startDate, startTime, timezone);
       const input: CreateSeriesInput = {
         title: title.trim(),
         notes: notes.trim(),
@@ -1010,7 +1013,7 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
         weekday: weekdayVariants[weekdayKey],
         weekday_ordinal: derivedOrdinal ? [{ [derivedOrdinal]: null } as any] : [],
         start_date: dateToNanos(startDateTime),
-        end_date: endDate ? [dateToNanos(new Date(endDate + 'T23:59:59'))] : [],
+        end_date: endDate ? [dateToNanos(parseDateTimeInTz(endDate, '23:59', timezone))] : [],
         default_duration_minutes: duration ? [parseInt(duration)] : [],
         color: color ? [color] : [],
         default_host: defaultHost ? [Principal.fromText(defaultHost)] : [],
@@ -1083,6 +1086,7 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
 }
 
 function EditSeriesForm({ actor, triggerSessionExpired, series, onSuccess, onCancel }: { actor: any; triggerSessionExpired: () => void; series: EventSeries; onSuccess: () => void; onCancel: () => void }) {
+  const { timezone } = useTimezone();
   const [title, setTitle] = useState(series.title);
   const [notes, setNotes] = useState(series.notes);
   const [endDate, setEndDate] = useState(series.end_date.length > 0 ? nanosToDate(series.end_date[0] as bigint).toISOString().split('T')[0] : '');
@@ -1110,7 +1114,7 @@ function EditSeriesForm({ actor, triggerSessionExpired, series, onSuccess, onCan
       const updateInput = {
         title: [title.trim()],
         notes: [notes.trim()],
-        end_date: endDate ? [[dateToNanos(new Date(endDate + 'T23:59:59'))]] : [[]],
+        end_date: endDate ? [[dateToNanos(parseDateTimeInTz(endDate, '23:59', timezone))]] : [[]],
         default_duration_minutes: [parseInt(duration)],
         color: color ? [[color]] : [[]],
         paused: [],
@@ -1145,7 +1149,7 @@ function EditSeriesForm({ actor, triggerSessionExpired, series, onSuccess, onCan
       {error && <div style={styles.formError}>{error}</div>}
       <div style={styles.formRow}><label style={styles.label}>Title</label><input type="text" value={title} onChange={e => setTitle(e.target.value)} style={styles.input} required /></div>
       <div style={styles.formRow}><label style={styles.label}>Notes</label><textarea value={notes} onChange={e => setNotes(e.target.value)} style={styles.textarea} /></div>
-      <div style={styles.readOnlyInfo}><strong>Schedule:</strong> Every {weekdayLabel} at {nanosToDate(series.start_date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}<br /><small>Schedule cannot be changed. Delete and recreate if needed.</small></div>
+      <div style={styles.readOnlyInfo}><strong>Schedule:</strong> Every {weekdayLabel} at {nanosToDate(series.start_date).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: timezone })}<br /><small>Schedule cannot be changed. Delete and recreate if needed.</small></div>
       <div style={styles.formRowGroup}>
         <div style={styles.formRowHalf}><label style={styles.label}>Duration</label><select value={duration} onChange={e => setDuration(e.target.value)} style={styles.select}><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option><option value="90">1.5 hours</option><option value="120">2 hours</option></select></div>
         <div style={styles.formRowHalf}><label style={styles.label}>End Date (optional)</label><input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={styles.input} /></div>
@@ -1251,6 +1255,37 @@ function SystemSettings() {
             <span style={settings.claims_paused ? styles.pausedLabel : styles.activeLabel}>{settings.claims_paused ? 'Paused' : 'Active'}</span>
           </div>
         </div>
+        <div style={styles.settingRow}>
+          <div style={styles.settingInfo}><div style={styles.settingLabel}>Ignore Daylight Savings</div><div style={styles.settingDesc}>Keep events at the same clock time year-round instead of shifting when DST changes</div></div>
+          <div style={styles.settingControl}>
+            <Toggle
+              checked={settings.ignore_dst}
+              onChange={(checked) => setSettings({ ...settings, ignore_dst: checked })}
+            />
+            <span style={settings.ignore_dst ? styles.pausedLabel : styles.activeLabel}>{settings.ignore_dst ? 'Ignoring DST' : 'DST Active'}</span>
+          </div>
+        </div>
+        {settings.ignore_dst && (
+          <div style={styles.settingRow}>
+            <div style={styles.settingInfo}><div style={styles.settingLabel}>Standard Timezone</div><div style={styles.settingDesc}>Select your timezone's standard (non-DST) UTC offset</div></div>
+            <div style={styles.settingControl}>
+              <select
+                value={settings.dst_utc_offset_minutes?.[0] ?? ''}
+                onChange={e => {
+                  const val = e.target.value;
+                  setSettings({ ...settings, dst_utc_offset_minutes: val ? [parseInt(val)] : [] });
+                }}
+                style={styles.numberInput}
+              >
+                <option value="">Select...</option>
+                <option value="-300">Eastern (UTC-5)</option>
+                <option value="-360">Central (UTC-6)</option>
+                <option value="-420">Mountain (UTC-7)</option>
+                <option value="-480">Pacific (UTC-8)</option>
+              </select>
+            </div>
+          </div>
+        )}
         <button style={styles.submitBtn} onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Settings'}</button>
       </div>
 

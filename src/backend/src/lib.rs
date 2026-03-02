@@ -286,6 +286,7 @@ fn create_one_off_event(input: CreateEventInput) -> ApiResult<EventInstance> {
         color: None,
         exclude_from_coverage: false,
         created_at: now,
+        occurrence_start_utc: None,
     };
     
     storage::insert_instance(instance.clone());
@@ -433,6 +434,24 @@ fn assign_host(
         user.principal,
         is_admin,
     )
+}
+
+/// Cancel a single instance of a recurring series (admin only)
+#[update]
+fn cancel_instance(
+    series_id: Vec<u8>,
+    occurrence_start: u64,
+    instance_id: Vec<u8>,
+) -> ApiResult<EventInstance> {
+    let admin = auth::require_admin()?;
+
+    let sid: [u8; 16] = series_id.try_into()
+        .map_err(|_| ApiError::InvalidInput("Invalid series_id".to_string()))?;
+
+    let iid: [u8; 16] = instance_id.try_into()
+        .map_err(|_| ApiError::InvalidInput("Invalid instance_id".to_string()))?;
+
+    coverage::cancel_instance(sid, occurrence_start, iid, admin.principal)
 }
 
 /// Unassign host from an event instance

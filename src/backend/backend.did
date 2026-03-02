@@ -79,12 +79,18 @@ type EventInstance = record {
     color: opt text;
     exclude_from_coverage: bool;
     created_at: nat64;
+    occurrence_start_utc: opt nat64;
 };
 
 type GlobalSettings = record {
     forward_window_months: nat8;
     claims_paused: bool;
     default_event_duration_minutes: nat32;
+    org_name: opt text;
+    org_tagline: opt text;
+    org_logo_url: opt text;
+    ignore_dst: bool;
+    dst_utc_offset_minutes: opt int16;
 };
 
 type NotificationJob = record {
@@ -228,6 +234,7 @@ service : {
     // Coverage Queue
     assign_host : (opt blob, opt nat64, blob, principal) -> (Result_EventInstance);
     unassign_host : (opt blob, opt nat64, blob) -> (Result_EventInstance);
+    cancel_instance : (blob, nat64, blob) -> (Result_EventInstance);
 
     // Admin - System
     update_global_settings : (GlobalSettings) -> (Result_Unit);

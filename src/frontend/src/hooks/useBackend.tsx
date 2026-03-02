@@ -79,6 +79,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'color': IDL.Opt(IDL.Text),
     'exclude_from_coverage': IDL.Bool,
     'created_at': IDL.Nat64,
+    'occurrence_start_utc': IDL.Opt(IDL.Nat64),
   });
 
   const GlobalSettings = IDL.Record({
@@ -88,6 +89,8 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'org_name': IDL.Opt(IDL.Text),
     'org_tagline': IDL.Opt(IDL.Text),
     'org_logo_url': IDL.Opt(IDL.Text),
+    'ignore_dst': IDL.Bool,
+    'dst_utc_offset_minutes': IDL.Opt(IDL.Int16),
   });
 
   const CoverageStats = IDL.Record({
@@ -216,8 +219,13 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
       []
     ),
     'unassign_host': IDL.Func(
-      [IDL.Opt(IDL.Vec(IDL.Nat8)), IDL.Opt(IDL.Nat64), IDL.Vec(IDL.Nat8)], 
-      [Result_EventInstance], 
+      [IDL.Opt(IDL.Vec(IDL.Nat8)), IDL.Opt(IDL.Nat64), IDL.Vec(IDL.Nat8)],
+      [Result_EventInstance],
+      []
+    ),
+    'cancel_instance': IDL.Func(
+      [IDL.Vec(IDL.Nat8), IDL.Nat64, IDL.Vec(IDL.Nat8)],
+      [Result_EventInstance],
       []
     ),
 
@@ -288,6 +296,7 @@ export interface EventInstance {
   color: [string] | [];
   exclude_from_coverage: boolean;
   created_at: bigint;
+  occurrence_start_utc: [bigint] | [];
 }
 
 
@@ -317,6 +326,8 @@ export interface GlobalSettings {
   org_name: string[];
   org_tagline: string[];
   org_logo_url: string[];
+  ignore_dst: boolean;
+  dst_utc_offset_minutes: number[];
 }
 
 export interface CoverageStats {

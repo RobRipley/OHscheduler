@@ -165,6 +165,10 @@ pub struct EventInstance {
     pub color: Option<String>,
     pub exclude_from_coverage: bool,
     pub created_at: u64,
+    /// Original (unadjusted) occurrence start time for series instances.
+    /// Used as the override key when assigning/unassigning hosts.
+    /// None for one-off events.
+    pub occurrence_start_utc: Option<u64>,
 }
 
 
@@ -197,6 +201,8 @@ pub struct GlobalSettings {
     pub org_name: Option<String>,
     pub org_tagline: Option<String>,
     pub org_logo_url: Option<String>,
+    pub ignore_dst: bool,
+    pub dst_utc_offset_minutes: Option<i16>,
 }
 
 impl Default for GlobalSettings {
@@ -208,6 +214,8 @@ impl Default for GlobalSettings {
             org_name: None,
             org_tagline: None,
             org_logo_url: None,
+            ignore_dst: false,
+            dst_utc_offset_minutes: None,
         }
     }
 }
@@ -664,7 +672,40 @@ impl Storable for EventInstance {
         match Decode!(bytes.as_ref(), Self) {
             Ok(i) => i,
             Err(_) => {
-                // Try decoding as previous format (with color but without exclude_from_coverage)
+                // V3: has exclude_from_coverage but no occurrence_start_utc
+                #[derive(CandidType, Deserialize)]
+                struct V3EventInstance {
+                    instance_id: [u8; 16],
+                    series_id: Option<[u8; 16]>,
+                    start_utc: u64,
+                    end_utc: u64,
+                    title: String,
+                    notes: String,
+                    link: Option<String>,
+                    host_principal: Option<Principal>,
+                    status: EventStatus,
+                    color: Option<String>,
+                    exclude_from_coverage: bool,
+                    created_at: u64,
+                }
+                if let Ok(v3) = Decode!(bytes.as_ref(), V3EventInstance) {
+                    return EventInstance {
+                        instance_id: v3.instance_id,
+                        series_id: v3.series_id,
+                        start_utc: v3.start_utc,
+                        end_utc: v3.end_utc,
+                        title: v3.title,
+                        notes: v3.notes,
+                        link: v3.link,
+                        host_principal: v3.host_principal,
+                        status: v3.status,
+                        color: v3.color,
+                        exclude_from_coverage: v3.exclude_from_coverage,
+                        created_at: v3.created_at,
+                        occurrence_start_utc: None,
+                    };
+                }
+                // V2: has color but no exclude_from_coverage
                 #[derive(CandidType, Deserialize)]
                 struct PrevEventInstance {
                     instance_id: [u8; 16],
@@ -693,9 +734,10 @@ impl Storable for EventInstance {
                         color: prev.color,
                         exclude_from_coverage: false,
                         created_at: prev.created_at,
+                        occurrence_start_utc: None,
                     };
                 }
-                // Try decoding as oldest format (without color or exclude_from_coverage)
+                // V1: no color, no exclude_from_coverage
                 #[derive(CandidType, Deserialize)]
                 struct OldEventInstance {
                     instance_id: [u8; 16],
@@ -723,6 +765,7 @@ impl Storable for EventInstance {
                     color: None,
                     exclude_from_coverage: false,
                     created_at: old.created_at,
+                    occurrence_start_utc: None,
                 }
             }
         }
@@ -774,20 +817,45 @@ impl Storable for GlobalSettings {
         match Decode!(bytes.as_ref(), Self) {
             Ok(s) => s,
             Err(_) => {
+                // V2: has org fields but no DST fields
                 #[derive(CandidType, Deserialize)]
-                struct OldGlobalSettings {
+                struct V2GlobalSettings {
+                    forward_window_months: u8,
+                    claims_paused: bool,
+                    default_event_duration_minutes: u32,
+                    org_name: Option<String>,
+                    org_tagline: Option<String>,
+                    org_logo_url: Option<String>,
+                }
+                if let Ok(v2) = Decode!(bytes.as_ref(), V2GlobalSettings) {
+                    return GlobalSettings {
+                        forward_window_months: v2.forward_window_months,
+                        claims_paused: v2.claims_paused,
+                        default_event_duration_minutes: v2.default_event_duration_minutes,
+                        org_name: v2.org_name,
+                        org_tagline: v2.org_tagline,
+                        org_logo_url: v2.org_logo_url,
+                        ignore_dst: false,
+                        dst_utc_offset_minutes: None,
+                    };
+                }
+                // V1: no org fields, no DST fields
+                #[derive(CandidType, Deserialize)]
+                struct V1GlobalSettings {
                     forward_window_months: u8,
                     claims_paused: bool,
                     default_event_duration_minutes: u32,
                 }
-                let old = Decode!(bytes.as_ref(), OldGlobalSettings).unwrap();
+                let v1 = Decode!(bytes.as_ref(), V1GlobalSettings).unwrap();
                 GlobalSettings {
-                    forward_window_months: old.forward_window_months,
-                    claims_paused: old.claims_paused,
-                    default_event_duration_minutes: old.default_event_duration_minutes,
+                    forward_window_months: v1.forward_window_months,
+                    claims_paused: v1.claims_paused,
+                    default_event_duration_minutes: v1.default_event_duration_minutes,
                     org_name: None,
                     org_tagline: None,
                     org_logo_url: None,
+                    ignore_dst: false,
+                    dst_utc_offset_minutes: None,
                 }
             }
         }

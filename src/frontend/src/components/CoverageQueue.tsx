@@ -106,8 +106,8 @@ export default function CoverageQueue() {
     try {
       // series_id comes from Candid as opt blob: [] for None, [Uint8Array] for Some
       const seriesId = event.series_id;
-      // occurrence_start is opt nat64: pass [start_utc] if series event, [] if one-off
-      const occurrenceStart = (seriesId && seriesId.length > 0) ? [event.start_utc] : [];
+      // occurrence_start is opt nat64: use original (unadjusted) occurrence time for override key
+      const occurrenceStart = (seriesId && seriesId.length > 0) ? [event.occurrence_start_utc.length > 0 ? event.occurrence_start_utc[0] : event.start_utc] : [];
       
       const result = await actor.assign_host(
         seriesId,
@@ -156,7 +156,7 @@ export default function CoverageQueue() {
     setAssigningId(eventKey);
     try {
       const seriesId = event.series_id;
-      const occurrenceStart = (seriesId && seriesId.length > 0) ? [event.start_utc] : [];
+      const occurrenceStart = (seriesId && seriesId.length > 0) ? [event.occurrence_start_utc.length > 0 ? event.occurrence_start_utc[0] : event.start_utc] : [];
       const result = await actor.assign_host(seriesId, occurrenceStart, event.instance_id, user.principal);
       if ('Ok' in result) {
         showToast(`Claimed by you!`);
@@ -223,9 +223,10 @@ export default function CoverageQueue() {
       const eid = bytesToHex(event.instance_id as number[]);
       if (!selectedIds.has(eid)) continue;
       try {
+        const occStart = event.occurrence_start_utc.length > 0 ? event.occurrence_start_utc[0] : event.start_utc;
         const result = await actor.assign_host(
           event.series_id ? [Array.from(event.series_id)] : [],
-          event.start_utc ? [event.start_utc] : [],
+          occStart ? [occStart] : [],
           Array.from(event.instance_id as number[]),
           Principal.fromText(bulkHost)
         );
