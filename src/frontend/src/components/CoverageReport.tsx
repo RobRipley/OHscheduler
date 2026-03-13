@@ -104,7 +104,7 @@ export default function CoverageReport() {
       {sortedHosts.length === 0 ? <p style={styles.noData}>No hosting data yet.</p> : (
         <div style={styles.hostList}>
           {sortedHosts.map(host => (
-            <div key={host.name} style={styles.hostRow}>
+            <div key={host.name} style={styles.hostRow} className="report-host-row">
               <span style={styles.hostName} className="report-host-name">{host.name}</span>
               <div style={styles.hostBar}><div style={{ ...styles.hostBarFill, width: `${(host.count / maxCount) * 100}%` }} /></div>
               <span style={styles.hostCount}>{host.count}</span>
