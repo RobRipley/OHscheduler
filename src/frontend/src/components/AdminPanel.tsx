@@ -218,7 +218,7 @@ function UserManagement() {
       {linkingUser && <LinkPrincipalModal user={linkingUser} actor={actor} triggerSessionExpired={triggerSessionExpired} onSuccess={() => { setLinkingUser(null); fetchUsers(); }} onCancel={() => setLinkingUser(null)} />}
       {editingUser && <EditUserModal user={editingUser} actor={actor} triggerSessionExpired={triggerSessionExpired} onSuccess={() => { setEditingUser(null); fetchUsers(); }} onCancel={() => setEditingUser(null)} />}
       {showInviteCode && <InviteCodeModal code={showInviteCode.code} onClose={() => setShowInviteCode(null)} />}
-      <div style={styles.tableContainer}>
+      <div style={styles.tableContainer} className="admin-table-wrap">
         <table style={styles.table}>
           <thead>
             <tr>

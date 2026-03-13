@@ -9,14 +9,36 @@ import NotificationBell from './NotificationBell';
 import { Avatar } from './ui';
 import { theme } from '../theme';
 
+// SVG icons for bottom tab bar
+const CalendarIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+  </svg>
+);
+const QueueIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+  </svg>
+);
+const ReportsIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+  </svg>
+);
+const AdminIcon = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+  </svg>
+);
+
 export default function AuthenticatedLayout() {
   const { user, isAdmin, logout, principal, login, isSessionExpired: authSessionExpired, clearExpiredSession } = useAuth();
   const { sessionExpired: backendSessionExpired } = useBackend();
   const navigate = useNavigate();
-  
+
   // Session is expired if either auth or backend detects it
   const sessionExpired = authSessionExpired || backendSessionExpired;
-  
+
   const handleLogout = async () => {
     await logout();
     navigate('/');
@@ -45,16 +67,17 @@ export default function AuthenticatedLayout() {
           </div>
         </div>
       )}
-      
+
+      {/* Desktop header */}
       <header style={styles.header} className="app-header">
         <div style={styles.headerContent} className="app-header-content">
           <div style={styles.logoGroup} className="app-logo-group">
             <img src="/yieldschool_inc_logo.jpeg" alt="Yieldschool" style={styles.logoImg} />
             <h1 style={styles.logo}>Office Hours</h1>
           </div>
-          <nav style={styles.nav} className="app-nav">
-            <NavLink 
-              to="/dashboard" 
+          <nav style={styles.nav} className="app-nav app-nav-desktop">
+            <NavLink
+              to="/dashboard"
               end
               style={({ isActive }) => ({
                 ...styles.navLink,
@@ -63,7 +86,7 @@ export default function AuthenticatedLayout() {
             >
               Calendar
             </NavLink>
-            <NavLink 
+            <NavLink
               to="/dashboard/queue"
               style={({ isActive }) => ({
                 ...styles.navLink,
@@ -82,7 +105,7 @@ export default function AuthenticatedLayout() {
               Reports
             </NavLink>
             {isAdmin && (
-              <NavLink 
+              <NavLink
                 to="/dashboard/admin"
                 style={({ isActive }) => ({
                   ...styles.navLink,
@@ -95,12 +118,12 @@ export default function AuthenticatedLayout() {
           </nav>
           <div style={styles.userSection} className="app-user-section">
             <NotificationBell />
-            
-            <div style={styles.divider} />
-            
+
+            <div style={styles.divider} className="app-divider" />
+
             <div style={styles.userGroup}>
               <Avatar name={user?.name || 'U'} size={28} />
-              <span style={styles.userName}>
+              <span style={styles.userName} className="app-user-name">
                 {user?.name || principal?.toText().slice(0, 8) + '...'}
               </span>
             </div>
@@ -114,7 +137,7 @@ export default function AuthenticatedLayout() {
           </div>
         </div>
       </header>
-      
+
       <main style={styles.main} className="app-main">
         <Routes>
           <Route index element={<Calendar />} />
@@ -123,6 +146,28 @@ export default function AuthenticatedLayout() {
           {isAdmin && <Route path="admin/*" element={<AdminPanel />} />}
         </Routes>
       </main>
+
+      {/* Mobile bottom tab bar */}
+      <nav className="app-bottom-tabs" style={styles.bottomTabs}>
+        <NavLink to="/dashboard" end className={({ isActive }) => `app-bottom-tab ${isActive ? 'app-bottom-tab-active' : ''}`}>
+          <CalendarIcon />
+          <span>Calendar</span>
+        </NavLink>
+        <NavLink to="/dashboard/queue" className={({ isActive }) => `app-bottom-tab ${isActive ? 'app-bottom-tab-active' : ''}`}>
+          <QueueIcon />
+          <span>Queue</span>
+        </NavLink>
+        <NavLink to="/dashboard/reports" className={({ isActive }) => `app-bottom-tab ${isActive ? 'app-bottom-tab-active' : ''}`}>
+          <ReportsIcon />
+          <span>Reports</span>
+        </NavLink>
+        {isAdmin && (
+          <NavLink to="/dashboard/admin" className={({ isActive }) => `app-bottom-tab ${isActive ? 'app-bottom-tab-active' : ''}`}>
+            <AdminIcon />
+            <span>Admin</span>
+          </NavLink>
+        )}
+      </nav>
     </div>
   );
 }
@@ -132,6 +177,7 @@ const styles: { [key: string]: React.CSSProperties } = {
   container: {
     minHeight: '100vh',
     background: theme.bg,
+    paddingBottom: 0, // CSS class adds padding on mobile for bottom tabs
   },
   sessionExpiredBanner: {
     background: 'rgba(251, 146, 60, 0.15)',
@@ -259,5 +305,16 @@ const styles: { [key: string]: React.CSSProperties } = {
     maxWidth: '1200px',
     margin: '0 auto',
     padding: '24px 20px',
+  },
+  bottomTabs: {
+    display: 'none', // Shown via CSS on mobile
+    position: 'fixed' as const,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    background: theme.surface,
+    borderTop: `1px solid ${theme.border}`,
+    zIndex: 100,
+    padding: '0 0 env(safe-area-inset-bottom)',
   },
 };

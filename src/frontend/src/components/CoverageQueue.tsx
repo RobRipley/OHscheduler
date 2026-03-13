@@ -312,7 +312,7 @@ export default function CoverageQueue() {
 
       {/* Filters */}
       {events.length > 0 && (
-        <div style={styles.filterBar}>
+        <div style={styles.filterBar} className="queue-filter-bar">
           <label style={{ ...styles.filterGroup, cursor: 'pointer' }}>
             <input
               type="checkbox"
@@ -354,7 +354,7 @@ export default function CoverageQueue() {
 
       {/* Bulk action bar */}
       {selectedIds.size > 0 && (
-        <div style={styles.bulkBar}>
+        <div style={styles.bulkBar} className="queue-bulk-bar">
           <span style={styles.bulkCount}>{selectedIds.size} selected</span>
           <select
             value={bulkHost}
@@ -407,14 +407,14 @@ export default function CoverageQueue() {
                 ...(isCovered ? styles.cardCovered : {}),
                 borderLeft: `3px solid ${seriesColor.border}`,
               }}>
-                <div style={styles.cardInner}>
+                <div style={styles.cardInner} className="queue-card-inner">
                   <input
                     type="checkbox"
                     checked={selectedIds.has(eventKey)}
                     onChange={() => toggleSelect(eventKey)}
                     style={styles.checkbox}
                   />
-                  <div style={styles.cardLeft}>
+                  <div style={styles.cardLeft} className="queue-card-left">
                     <span style={styles.dateText}>
                       {formatDateInZone(nanosToDate(event.start_utc))}
                     </span>
@@ -425,13 +425,13 @@ export default function CoverageQueue() {
                     </div>
                   </div>
                   {event.notes && (
-                    <div style={styles.notesMid}>{event.notes}</div>
+                    <div style={styles.notesMid} className="queue-notes-mid">{event.notes}</div>
                   )}
-                  <div style={styles.cardRight}>
+                  <div style={styles.cardRight} className="queue-card-right">
                     {isCovered ? (
                       <span style={styles.coveredBadge}>Covered</span>
                     ) : (
-                      <div style={styles.assignRow}>
+                      <div style={styles.assignRow} className="queue-assign-row">
                         <Select
                           options={(() => {
                             const opts: SelectOption[] = [];

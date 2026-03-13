@@ -70,7 +70,7 @@ export default function CoverageReport() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap' as const, gap: '12px' }}>
         <div>
           <h3 style={styles.sectionTitle}>Coverage Reports</h3>
           <p style={{ ...styles.reportSubtitle, marginBottom: 0 }}>Next 60 days</p>
@@ -94,7 +94,7 @@ export default function CoverageReport() {
           } catch (err) { console.error('CSV export failed', err); }
         }}>Export CSV</button>
       </div>
-      <div style={styles.statsGrid}>
+      <div style={styles.statsGrid} className="report-stats-grid">
         <div style={styles.statCard}><div style={styles.statValue}>{totalEvents}</div><div style={styles.statLabel}>Total Sessions</div></div>
         <div style={styles.statCard}><div style={{ ...styles.statValue, color: theme.accent }}>{assignedEvents}</div><div style={styles.statLabel}>Assigned</div></div>
         <div style={styles.statCard}><div style={{ ...styles.statValue, color: '#F87171' }}>{needsHostEvents}</div><div style={styles.statLabel}>Needs Host</div></div>
@@ -105,7 +105,7 @@ export default function CoverageReport() {
         <div style={styles.hostList}>
           {sortedHosts.map(host => (
             <div key={host.name} style={styles.hostRow}>
-              <span style={styles.hostName}>{host.name}</span>
+              <span style={styles.hostName} className="report-host-name">{host.name}</span>
               <div style={styles.hostBar}><div style={{ ...styles.hostBarFill, width: `${(host.count / maxCount) * 100}%` }} /></div>
               <span style={styles.hostCount}>{host.count}</span>
             </div>

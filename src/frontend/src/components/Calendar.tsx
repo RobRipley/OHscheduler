@@ -267,8 +267,55 @@ export default function Calendar() {
 
       {error && <div style={styles.error}>{error}</div>}
 
+      {/* Mobile agenda fallback - always rendered, shown/hidden via CSS */}
+      <div className="cal-agenda-mobile" style={{ display: 'none' }}>
+        {(() => {
+          const allEvents = events
+            .filter(e => 'Active' in e.status)
+            .sort((a, b) => (a.start_utc < b.start_utc ? -1 : 1));
+          if (allEvents.length === 0) return <div style={modalStyles.agendaEmpty}>No events scheduled</div>;
+          let lastDate = '';
+          return allEvents.map((event) => {
+            const eventDate = nanosToDate(event.start_utc);
+            const dateStr = eventDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: timezone });
+            const showDate = dateStr !== lastDate;
+            lastDate = dateStr;
+            const isNoHost = event.host_principal.length === 0;
+            const hostName = getHostName(event.host_principal);
+            const color = isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title, event.color?.[0]);
+            return (
+              <div key={bytesToHex(event.instance_id as number[])}>
+                {showDate && (
+                  <div style={modalStyles.agendaDateHeader}>
+                    <div style={modalStyles.agendaDateDot} />
+                    <span>{dateStr}</span>
+                  </div>
+                )}
+                <div
+                  style={{
+                    ...modalStyles.agendaCard,
+                    borderLeftColor: color.border,
+                  }}
+                  className="event-card-hover"
+                  onClick={() => setSelectedEvent(event)}
+                >
+                  <div style={modalStyles.agendaTime}>
+                    <div style={modalStyles.agendaTimeStart}>{formatTimeInTz(event.start_utc)}</div>
+                    <div style={modalStyles.agendaTimeEnd}>{formatTimeInTz(event.end_utc)}</div>
+                  </div>
+                  <div style={modalStyles.agendaInfo}>
+                    <div style={modalStyles.agendaTitle}>{event.title}</div>
+                    <div style={isNoHost ? modalStyles.agendaHostNoHost : modalStyles.agendaHost}>{isNoHost ? '+ Assign host' : hostName}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          });
+        })()}
+      </div>
+
       {viewMode === 'month' ? (
-        <div style={styles.monthCalendar}>
+        <div style={styles.monthCalendar} className="cal-month-grid">
           <div style={styles.weekHeader}>
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
               <div key={day} style={styles.weekHeaderCell}>{day}</div>
@@ -333,7 +380,7 @@ export default function Calendar() {
           ))}
         </div>
       ) : viewMode === 'week' ? (
-        <div style={styles.weekCalendar}>
+        <div style={styles.weekCalendar} className="cal-week-grid">
           {calendarGrid[0].map(date => {
             const dateKey = getDateKeyFromDate(date);
             const dayEvents = eventsByDate.get(dateKey) || [];

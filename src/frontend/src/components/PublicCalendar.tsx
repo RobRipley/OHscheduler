@@ -262,7 +262,7 @@ export default function PublicCalendar() {
   return (
     <div style={styles.container}>
       <main style={styles.main}>
-        <div style={styles.headerRow}>
+        <div style={styles.headerRow} className="public-header-row">
           <div style={styles.titleGroup}>
             <img src={orgLogoUrl} alt={orgName} style={styles.logo} />
             <div style={styles.titleText}>
@@ -271,7 +271,7 @@ export default function PublicCalendar() {
             </div>
           </div>
           {!loading && nextSession && (
-            <div style={styles.nextSessionBanner} onClick={() => setSelectedEvent(nextSession)}>
+            <div style={styles.nextSessionBanner} className="next-session-banner" onClick={() => setSelectedEvent(nextSession)}>
               <div style={styles.nextSessionLabel}>Next Session</div>
               <div style={styles.nextSessionInfo}>
                 <strong>{nextSession.title}</strong>
@@ -294,7 +294,7 @@ export default function PublicCalendar() {
           </div>
         </div>
 
-        <div style={styles.monthNav}>
+        <div style={styles.monthNav} className="public-month-nav">
           <div style={styles.navLeft}>
             <button 
               onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
@@ -591,9 +591,9 @@ const styles: { [key: string]: React.CSSProperties } = {
   needsHostSummary: { color: '#F87171' },
 
   // Next session banner (centered in header row)
-  nextSessionBanner: { position: 'absolute' as const, left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 14px', background: `linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(99, 102, 241, 0.06))`, border: `1px solid rgba(99, 102, 241, 0.25)`, borderRadius: '8px', cursor: 'pointer', transition: 'border-color 0.15s', whiteSpace: 'nowrap' as const },
+  nextSessionBanner: { position: 'absolute' as const, left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 14px', background: `linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(99, 102, 241, 0.06))`, border: `1px solid rgba(99, 102, 241, 0.25)`, borderRadius: '8px', cursor: 'pointer', transition: 'border-color 0.15s' },
   nextSessionLabel: { fontSize: '10px', fontWeight: 700, color: theme.accent, textTransform: 'uppercase' as const, letterSpacing: '0.08em', whiteSpace: 'nowrap' as const, background: 'rgba(99, 102, 241, 0.15)', padding: '4px 8px', borderRadius: '4px' },
-  nextSessionInfo: { display: 'flex', flexWrap: 'nowrap' as const, alignItems: 'center', gap: '4px 10px', fontSize: '14px', color: theme.textPrimary, whiteSpace: 'nowrap' as const },
+  nextSessionInfo: { display: 'flex', flexWrap: 'wrap' as const, alignItems: 'center', gap: '4px 10px', fontSize: '14px', color: theme.textPrimary },
   nextSessionTime: { fontSize: '13px', color: theme.textSecondary },
   nextSessionHost: { fontSize: '13px', color: theme.accent },
   nextSessionArrow: { fontSize: '18px', color: theme.textMuted },
