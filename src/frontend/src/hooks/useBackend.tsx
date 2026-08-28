@@ -17,7 +17,7 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'Fourth': IDL.Null, 'Last': IDL.Null 
   });
   const EventStatus = IDL.Variant({ 'Active': IDL.Null, 'Cancelled': IDL.Null });
-  const HostSlot = IDL.Variant({ 'Primary': IDL.Null, 'Secondary': IDL.Null });
+  const HostSlot = IDL.Variant({ 'Primary': IDL.Null, 'Secondary': IDL.Null, 'Tertiary': IDL.Null });
 
   const OOOBlock = IDL.Record({
     'start_utc': IDL.Nat64,
@@ -66,6 +66,8 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'created_by': IDL.Principal,
     'allow_second_host': IDL.Opt(IDL.Bool),
     'default_host_2': IDL.Opt(IDL.Principal),
+    'allow_third_host': IDL.Opt(IDL.Bool),
+    'default_host_3': IDL.Opt(IDL.Principal),
   });
 
 
@@ -85,6 +87,8 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'occurrence_start_utc': IDL.Opt(IDL.Nat64),
     'host_principal_2': IDL.Opt(IDL.Principal),
     'allow_second_host': IDL.Opt(IDL.Bool),
+    'host_principal_3': IDL.Opt(IDL.Principal),
+    'allow_third_host': IDL.Opt(IDL.Bool),
   });
 
   const GlobalSettings = IDL.Record({
@@ -130,6 +134,8 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'exclude_from_coverage': IDL.Opt(IDL.Bool),
     'allow_second_host': IDL.Opt(IDL.Bool),
     'default_host_2': IDL.Opt(IDL.Principal),
+    'allow_third_host': IDL.Opt(IDL.Bool),
+    'default_host_3': IDL.Opt(IDL.Principal),
   });
 
 
@@ -144,6 +150,8 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'exclude_from_coverage': IDL.Opt(IDL.Bool),
     'allow_second_host': IDL.Opt(IDL.Bool),
     'default_host_2': IDL.Opt(IDL.Opt(IDL.Principal)),
+    'allow_third_host': IDL.Opt(IDL.Bool),
+    'default_host_3': IDL.Opt(IDL.Opt(IDL.Principal)),
   });
 
   const ApiError = IDL.Variant({
@@ -308,9 +316,11 @@ export interface EventInstance {
   occurrence_start_utc: [bigint] | [];
   host_principal_2: [Principal] | [];
   allow_second_host: [boolean] | [];
+  host_principal_3: [Principal] | [];
+  allow_third_host: [boolean] | [];
 }
 
-export type HostSlot = { Primary: null } | { Secondary: null };
+export type HostSlot = { Primary: null } | { Secondary: null } | { Tertiary: null };
 
 
 export interface EventSeries {
@@ -332,6 +342,8 @@ export interface EventSeries {
   created_by: Principal;
   allow_second_host: [boolean] | [];
   default_host_2: [Principal] | [];
+  allow_third_host: [boolean] | [];
+  default_host_3: [Principal] | [];
 }
 
 export interface GlobalSettings {
@@ -380,6 +392,8 @@ export interface CreateSeriesInput {
   exclude_from_coverage: [boolean] | [];
   allow_second_host: [boolean] | [];
   default_host_2: [Principal] | [];
+  allow_third_host: [boolean] | [];
+  default_host_3: [Principal] | [];
 }
 
 

@@ -17,12 +17,13 @@ function firstName(fullName: string): string {
   return fullName.trim().split(/\s+/)[0] || fullName;
 }
 
-// Combined "First1 & First2" (or single name / "No host") host line for calendar bubbles
+// Combined "First1 & First2 & First3" (or single name / "No host") host line for calendar bubbles
 function hostLine(event: EventInstance, users: Map<string, UserDirectoryEntry>): { text: string; isNoHost: boolean; hasCoHost: boolean } {
   const host1 = event.host_principal.length > 0 ? users.get(event.host_principal[0]?.toText() ?? '')?.name : undefined;
   const host2 = event.host_principal_2.length > 0 ? users.get(event.host_principal_2[0]?.toText() ?? '')?.name : undefined;
-  if (!host1 && !host2) return { text: 'No host', isNoHost: true, hasCoHost: false };
-  const names = [host1, host2].filter((n): n is string => !!n).map(firstName);
+  const host3 = event.host_principal_3.length > 0 ? users.get(event.host_principal_3[0]?.toText() ?? '')?.name : undefined;
+  if (!host1 && !host2 && !host3) return { text: 'No host', isNoHost: true, hasCoHost: false };
+  const names = [host1, host2, host3].filter((n): n is string => !!n).map(firstName);
   return { text: names.join(' & '), isNoHost: false, hasCoHost: names.length > 1 };
 }
 
@@ -548,6 +549,8 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [selectedUserId2, setSelectedUserId2] = useState<string>('');
   const [showAddCoHost, setShowAddCoHost] = useState(false);
+  const [selectedUserId3, setSelectedUserId3] = useState<string>('');
+  const [showAddThirdHost, setShowAddThirdHost] = useState(false);
   const { timezone, abbrev } = useTimezone();
   const confirm = useConfirm();
   const hasHost = event.host_principal.length > 0;
@@ -555,6 +558,10 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
   const hasHost2 = event.host_principal_2.length > 0;
   const host2Name = hasHost2 ? (users.get(event.host_principal_2[0]?.toText() ?? '')?.name || 'Unknown') : '';
   const isHost2 = hasHost2 && currentUser?.principal?.toText() === event.host_principal_2[0]?.toText();
+  const allowThirdHost = event.allow_third_host.length > 0 ? event.allow_third_host[0]! : false;
+  const hasHost3 = event.host_principal_3.length > 0;
+  const host3Name = hasHost3 ? (users.get(event.host_principal_3[0]?.toText() ?? '')?.name || 'Unknown') : '';
+  const isHost3 = hasHost3 && currentUser?.principal?.toText() === event.host_principal_3[0]?.toText();
 
   const formatTimeInTz = (nanos: bigint) => {
     return nanosToDate(nanos).toLocaleTimeString('en-US', {
@@ -706,6 +713,72 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
     }
   };
 
+  const handleAssignHost3 = async () => {
+    if (!selectedUserId3) {
+      setActionError('Please select a third host');
+      return;
+    }
+    const selectedUser = users.get(selectedUserId3);
+    if (!selectedUser) return;
+
+    if (hasHost3 && selectedUser.principal.toText() !== event.host_principal_3[0]?.toText()) {
+      const confirmed = await confirm({
+        title: 'Reassign third host?',
+        message: `This shift's third host slot is currently assigned to ${host3Name}. Reassigning will remove them and they'll be notified.`,
+        confirmLabel: 'Reassign',
+        variant: 'default',
+      });
+      if (!confirmed) return;
+    }
+
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const result = await actor.assign_host(
+        event.series_id,
+        (event.series_id && event.series_id.length > 0) ? [event.occurrence_start_utc.length > 0 ? event.occurrence_start_utc[0] : event.start_utc] : [],
+        event.instance_id,
+        selectedUser.principal,
+        { Tertiary: null }
+      );
+      if ('Ok' in result) { setShowAddThirdHost(false); onRefresh(); }
+      else setActionError(getErrorMessage(result.Err));
+    } catch (err) {
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setActionError('Your session has expired. Please sign in again.');
+      } else {
+        setActionError('Failed to assign third host');
+      }
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRemoveHost3 = async () => {
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const result = await actor.unassign_host(
+        event.series_id,
+        (event.series_id && event.series_id.length > 0) ? [event.occurrence_start_utc.length > 0 ? event.occurrence_start_utc[0] : event.start_utc] : [],
+        event.instance_id,
+        { Tertiary: null }
+      );
+      if ('Ok' in result) onRefresh();
+      else setActionError(getErrorMessage(result.Err));
+    } catch (err) {
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setActionError('Your session has expired. Please sign in again.');
+      } else {
+        setActionError('Failed to remove third host');
+      }
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleTakeShift = async () => {
     if (!currentUser) return;
 
@@ -817,6 +890,9 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
   // Co-host options exclude whoever already holds the primary slot
   const primaryHostText = event.host_principal.length > 0 ? (event.host_principal[0]?.toText() ?? null) : null;
   const hostOptions2: SelectOption[] = hostOptions.filter(o => o.value !== primaryHostText);
+  // Third-host options exclude whoever holds the primary or co-host slot
+  const secondHostText = event.host_principal_2.length > 0 ? (event.host_principal_2[0]?.toText() ?? null) : null;
+  const hostOptions3: SelectOption[] = hostOptions.filter(o => o.value !== primaryHostText && o.value !== secondHostText);
 
   return (
     <Modal open={true} onClose={onClose} title={event.title} maxWidth="420px">
@@ -842,6 +918,12 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
           <div style={modalStyles.detail}>
             <span style={modalStyles.detailLabel}>Co-host</span>
             <span style={modalStyles.detailValue}>{host2Name}</span>
+          </div>
+        )}
+        {allowThirdHost && hasHost3 && (
+          <div style={modalStyles.detail}>
+            <span style={modalStyles.detailLabel}>Third host</span>
+            <span style={modalStyles.detailValue}>{host3Name}</span>
           </div>
         )}
         {event.notes && (
@@ -918,6 +1000,37 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
           {!isCancelled && !isHost2 && isAdmin && hasHost2 && (
             <Button variant="secondary" onClick={handleRemoveHost2} loading={actionLoading}>
               Remove co-host
+            </Button>
+          )}
+          {!isCancelled && allowThirdHost && hasHost2 && !hasHost3 && !showAddThirdHost && (
+            <Button variant="secondary" onClick={() => setShowAddThirdHost(true)}>
+              + Add third host
+            </Button>
+          )}
+          {!isCancelled && allowThirdHost && hasHost2 && (showAddThirdHost || hasHost3) && (!hasHost3 || isAdmin) && (
+            <div style={modalStyles.assignSection}>
+              <Select
+                options={hostOptions3}
+                value={selectedUserId3}
+                onChange={setSelectedUserId3}
+                placeholder="Select a third host..."
+                searchable={hostOptions3.length > 5}
+                dropUp
+                style={{ flex: 1 }}
+              />
+              <Button variant="primary" onClick={handleAssignHost3} loading={actionLoading} disabled={!selectedUserId3}>
+                {hasHost3 ? 'Reassign third host' : 'Assign third host'}
+              </Button>
+            </div>
+          )}
+          {!isCancelled && isHost3 && (
+            <Button variant="secondary" onClick={handleRemoveHost3} loading={actionLoading}>
+              Remove myself as third host
+            </Button>
+          )}
+          {!isCancelled && !isHost3 && isAdmin && hasHost3 && (
+            <Button variant="secondary" onClick={handleRemoveHost3} loading={actionLoading}>
+              Remove third host
             </Button>
           )}
           {!isCancelled && hasHost && (

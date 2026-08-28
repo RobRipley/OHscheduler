@@ -341,6 +341,13 @@ pub fn effective_host(ovr: Option<&InstanceOverride>, series_default: Option<Pri
                 ovr.and_then(|o| o.host_principal_2).or(series_default)
             }
         }
+        HostSlot::Tertiary => {
+            if ovr.and_then(|o| o.host_3_cleared).unwrap_or(false) {
+                None
+            } else {
+                ovr.and_then(|o| o.host_principal_3).or(series_default)
+            }
+        }
     }
 }
 
@@ -399,6 +406,7 @@ pub fn materialize_events(window_start: u64, window_end: u64) -> Vec<EventInstan
             // Host: check if explicitly cleared, otherwise use override value, then fall back to series default
             let host_principal = effective_host(ovr.as_ref(), series.default_host, HostSlot::Primary);
             let host_principal_2 = effective_host(ovr.as_ref(), series.default_host_2, HostSlot::Secondary);
+            let host_principal_3 = effective_host(ovr.as_ref(), series.default_host_3, HostSlot::Tertiary);
 
             results.push(EventInstance {
                 instance_id,
@@ -416,6 +424,8 @@ pub fn materialize_events(window_start: u64, window_end: u64) -> Vec<EventInstan
                 occurrence_start_utc: Some(occ_start),
                 host_principal_2,
                 allow_second_host: Some(series.allow_second_host.unwrap_or(false)),
+                host_principal_3,
+                allow_third_host: Some(series.allow_third_host.unwrap_or(false)),
             });
         }
     }

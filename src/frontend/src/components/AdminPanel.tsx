@@ -935,6 +935,8 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
   const [excludeFromCoverage, setExcludeFromCoverage] = useState(false);
   const [allowSecondHost, setAllowSecondHost] = useState(false);
   const [defaultHost2, setDefaultHost2] = useState('');
+  const [allowThirdHost, setAllowThirdHost] = useState(false);
+  const [defaultHost3, setDefaultHost3] = useState('');
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1022,6 +1024,8 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
         exclude_from_coverage: excludeFromCoverage ? [true] : [],
         allow_second_host: allowSecondHost ? [true] : [],
         default_host_2: allowSecondHost && defaultHost2 ? [Principal.fromText(defaultHost2)] : [],
+        allow_third_host: allowSecondHost && allowThirdHost ? [true] : [],
+        default_host_3: allowSecondHost && allowThirdHost && defaultHost3 ? [Principal.fromText(defaultHost3)] : [],
       };
       const result = await actor.create_event_series(input);
       if ('Ok' in result) onSuccess();
@@ -1070,10 +1074,19 @@ function AddSeriesForm({ actor, triggerSessionExpired, onSuccess, onCancel }: { 
       <div style={styles.formRow}><label style={styles.label}>Default Host (optional)</label><select value={defaultHost} onChange={e => setDefaultHost(e.target.value)} style={styles.select}><option value="">No default host</option>{users.map((u: any) => <option key={u.principal.toText()} value={u.principal.toText()}>{u.name}</option>)}</select></div>
       <div style={{ ...styles.formRow, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div><label style={styles.label}>Multiple hosts</label><div style={{ fontSize: '12px', color: theme.textMuted }}>Allow a second host to be assigned alongside the primary</div></div>
-        <Toggle checked={allowSecondHost} onChange={setAllowSecondHost} />
+        <Toggle checked={allowSecondHost} onChange={(v: boolean) => { setAllowSecondHost(v); if (!v) setAllowThirdHost(false); }} />
       </div>
       {allowSecondHost && (
         <div style={styles.formRow}><label style={styles.label}>Default Co-Host (optional)</label><select value={defaultHost2} onChange={e => setDefaultHost2(e.target.value)} style={styles.select}><option value="">No default co-host</option>{users.filter((u: any) => u.principal.toText() !== defaultHost).map((u: any) => <option key={u.principal.toText()} value={u.principal.toText()}>{u.name}</option>)}</select></div>
+      )}
+      {allowSecondHost && (
+        <div style={{ ...styles.formRow, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div><label style={styles.label}>Third host</label><div style={{ fontSize: '12px', color: theme.textMuted }}>Allow a third host alongside the primary and co-host</div></div>
+          <Toggle checked={allowThirdHost} onChange={setAllowThirdHost} />
+        </div>
+      )}
+      {allowSecondHost && allowThirdHost && (
+        <div style={styles.formRow}><label style={styles.label}>Default Third Host (optional)</label><select value={defaultHost3} onChange={e => setDefaultHost3(e.target.value)} style={styles.select}><option value="">No default third host</option>{users.filter((u: any) => u.principal.toText() !== defaultHost && u.principal.toText() !== defaultHost2).map((u: any) => <option key={u.principal.toText()} value={u.principal.toText()}>{u.name}</option>)}</select></div>
       )}
       <div style={{ ...styles.formRow, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div><label style={styles.label}>Exclude from coverage reports</label><div style={{ fontSize: '12px', color: theme.textMuted }}>Hide this series from coverage statistics</div></div>
@@ -1107,6 +1120,8 @@ function EditSeriesForm({ actor, triggerSessionExpired, series, onSuccess, onCan
   const [excludeFromCoverage, setExcludeFromCoverage] = useState(series.exclude_from_coverage);
   const [allowSecondHost, setAllowSecondHost] = useState(series.allow_second_host.length > 0 ? series.allow_second_host[0]! : false);
   const [defaultHost2, setDefaultHost2] = useState(series.default_host_2?.[0]?.toText() || '');
+  const [allowThirdHost, setAllowThirdHost] = useState(series.allow_third_host.length > 0 ? series.allow_third_host[0]! : false);
+  const [defaultHost3, setDefaultHost3] = useState(series.default_host_3?.[0]?.toText() || '');
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1135,6 +1150,8 @@ function EditSeriesForm({ actor, triggerSessionExpired, series, onSuccess, onCan
         exclude_from_coverage: [excludeFromCoverage],
         allow_second_host: [allowSecondHost],
         default_host_2: allowSecondHost && defaultHost2 ? [[Principal.fromText(defaultHost2)]] : [[]],
+        allow_third_host: [allowSecondHost && allowThirdHost],
+        default_host_3: allowSecondHost && allowThirdHost && defaultHost3 ? [[Principal.fromText(defaultHost3)]] : [[]],
       };
       const result = await actor.update_event_series(series.series_id, updateInput);
       if ('Ok' in result) onSuccess();
@@ -1185,10 +1202,19 @@ function EditSeriesForm({ actor, triggerSessionExpired, series, onSuccess, onCan
       <div style={styles.formRow}><label style={styles.label}>Default Host</label><select value={defaultHost} onChange={e => setDefaultHost(e.target.value)} style={styles.select}><option value="">No default host</option>{users.map((u: any) => <option key={u.principal.toText()} value={u.principal.toText()}>{u.name}</option>)}</select></div>
       <div style={{ ...styles.formRow, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div><label style={styles.label}>Multiple hosts</label><div style={{ fontSize: '12px', color: theme.textMuted }}>Allow a second host to be assigned alongside the primary</div></div>
-        <Toggle checked={allowSecondHost} onChange={setAllowSecondHost} />
+        <Toggle checked={allowSecondHost} onChange={(v: boolean) => { setAllowSecondHost(v); if (!v) setAllowThirdHost(false); }} />
       </div>
       {allowSecondHost && (
         <div style={styles.formRow}><label style={styles.label}>Default Co-Host</label><select value={defaultHost2} onChange={e => setDefaultHost2(e.target.value)} style={styles.select}><option value="">No default co-host</option>{users.filter((u: any) => u.principal.toText() !== defaultHost).map((u: any) => <option key={u.principal.toText()} value={u.principal.toText()}>{u.name}</option>)}</select></div>
+      )}
+      {allowSecondHost && (
+        <div style={{ ...styles.formRow, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div><label style={styles.label}>Third host</label><div style={{ fontSize: '12px', color: theme.textMuted }}>Allow a third host alongside the primary and co-host</div></div>
+          <Toggle checked={allowThirdHost} onChange={setAllowThirdHost} />
+        </div>
+      )}
+      {allowSecondHost && allowThirdHost && (
+        <div style={styles.formRow}><label style={styles.label}>Default Third Host</label><select value={defaultHost3} onChange={e => setDefaultHost3(e.target.value)} style={styles.select}><option value="">No default third host</option>{users.filter((u: any) => u.principal.toText() !== defaultHost && u.principal.toText() !== defaultHost2).map((u: any) => <option key={u.principal.toText()} value={u.principal.toText()}>{u.name}</option>)}</select></div>
       )}
       <div style={{ ...styles.formRow, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div><label style={styles.label}>Exclude from coverage reports</label><div style={{ fontSize: '12px', color: theme.textMuted }}>Hide this series from coverage statistics</div></div>

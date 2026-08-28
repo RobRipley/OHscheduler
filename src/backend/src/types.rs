@@ -59,6 +59,7 @@ pub enum EventStatus {
 pub enum HostSlot {
     Primary,
     Secondary,
+    Tertiary,
 }
 
 #[derive(CandidType, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -160,6 +161,9 @@ pub struct EventSeries {
     /// `None` is treated as `false` (older stored series predate this field).
     pub allow_second_host: Option<bool>,
     pub default_host_2: Option<Principal>,
+    /// Whether this series can have a third host. `None` is treated as `false`.
+    pub allow_third_host: Option<bool>,
+    pub default_host_3: Option<Principal>,
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
@@ -185,6 +189,8 @@ pub struct EventInstance {
     /// control without a separate (admin-only) series fetch. Always `Some(false)`
     /// (rendered as false) for one-off events.
     pub allow_second_host: Option<bool>,
+    pub host_principal_3: Option<Principal>,
+    pub allow_third_host: Option<bool>,
 }
 
 
@@ -210,6 +216,8 @@ pub struct InstanceOverride {
     pub host_principal_2: Option<Principal>,
     /// `None` is treated as `false` (older stored overrides predate this field).
     pub host_2_cleared: Option<bool>,
+    pub host_principal_3: Option<Principal>,
+    pub host_3_cleared: Option<bool>,
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
@@ -285,6 +293,8 @@ pub struct CreateSeriesInput {
     pub exclude_from_coverage: Option<bool>,
     pub allow_second_host: Option<bool>,
     pub default_host_2: Option<Principal>,
+    pub allow_third_host: Option<bool>,
+    pub default_host_3: Option<Principal>,
 }
 
 
@@ -300,6 +310,8 @@ pub struct UpdateSeriesInput {
     pub exclude_from_coverage: Option<bool>,
     pub allow_second_host: Option<bool>,
     pub default_host_2: Option<Option<Principal>>,  // None = don't change, Some(None) = clear, Some(Some(p)) = set
+    pub allow_third_host: Option<bool>,
+    pub default_host_3: Option<Option<Principal>>,  // None = don't change, Some(None) = clear, Some(Some(p)) = set
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
@@ -331,6 +343,7 @@ pub struct PublicEventView {
     pub status: EventStatus,
     pub color: Option<String>,
     pub host_name_2: Option<String>,
+    pub host_name_3: Option<String>,
 }
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
@@ -566,6 +579,8 @@ impl Storable for EventSeries {
                         created_by: v4.created_by,
                         allow_second_host: None,
                         default_host_2: None,
+                        allow_third_host: None,
+                        default_host_3: None,
                     };
                 }
                 // V3: has color+paused but no default_host
@@ -606,6 +621,8 @@ impl Storable for EventSeries {
                         created_by: v3.created_by,
                         allow_second_host: None,
                         default_host_2: None,
+                        allow_third_host: None,
+                        default_host_3: None,
                     };
                 }
                 // V2: has color but no paused, no default_host
@@ -645,6 +662,8 @@ impl Storable for EventSeries {
                         created_by: mid.created_by,
                         allow_second_host: None,
                         default_host_2: None,
+                        allow_third_host: None,
+                        default_host_3: None,
                     };
                 }
                 // V1: no color, no paused, no default_host
@@ -683,6 +702,8 @@ impl Storable for EventSeries {
                     created_by: old.created_by,
                     allow_second_host: None,
                     default_host_2: None,
+                    allow_third_host: None,
+                    default_host_3: None,
                 }
             }
         }
@@ -737,6 +758,8 @@ impl Storable for EventInstance {
                         occurrence_start_utc: None,
                         host_principal_2: None,
                         allow_second_host: None,
+                        host_principal_3: None,
+                        allow_third_host: None,
                     };
                 }
                 // V2: has color but no exclude_from_coverage
@@ -771,6 +794,8 @@ impl Storable for EventInstance {
                         occurrence_start_utc: None,
                         host_principal_2: None,
                         allow_second_host: None,
+                        host_principal_3: None,
+                        allow_third_host: None,
                     };
                 }
                 // V1: no color, no exclude_from_coverage
@@ -804,6 +829,8 @@ impl Storable for EventInstance {
                     occurrence_start_utc: None,
                     host_principal_2: None,
                     allow_second_host: None,
+                    host_principal_3: None,
+                    allow_third_host: None,
                 }
             }
         }
@@ -1101,5 +1128,157 @@ mod multi_host_migration_tests {
         assert_eq!(decoded.host_principal, old.host_principal);
         assert_eq!(decoded.host_principal_2, None);
         assert_eq!(decoded.host_2_cleared, None);
+    }
+}
+
+#[cfg(test)]
+mod third_host_migration_tests {
+    //! Same proof as `multi_host_migration_tests`, one field-set later: this
+    //! covers the shape that was actually live on mainnet when the third host
+    //! slot was added (has allow_second_host/default_host_2/host_principal_2/
+    //! host_2_cleared, but predates allow_third_host/default_host_3/
+    //! host_principal_3/host_3_cleared). Same trailing-Option subtyping proof.
+    use super::*;
+
+    #[test]
+    fn two_host_era_event_series_bytes_decode_with_third_host_fields_none() {
+        #[derive(CandidType, Deserialize)]
+        struct TwoHostEraEventSeries {
+            series_id: [u8; 16],
+            title: String,
+            notes: String,
+            link: Option<String>,
+            frequency: Frequency,
+            weekday: Weekday,
+            weekday_ordinal: Option<WeekdayOrdinal>,
+            start_date: u64,
+            end_date: Option<u64>,
+            default_duration_minutes: u32,
+            color: Option<String>,
+            paused: bool,
+            exclude_from_coverage: bool,
+            default_host: Option<Principal>,
+            created_at: u64,
+            created_by: Principal,
+            allow_second_host: Option<bool>,
+            default_host_2: Option<Principal>,
+        }
+
+        let old = TwoHostEraEventSeries {
+            series_id: [4u8; 16],
+            title: "Weekly Office Hours".to_string(),
+            notes: "notes".to_string(),
+            link: None,
+            frequency: Frequency::Weekly,
+            weekday: Weekday::Mon,
+            weekday_ordinal: None,
+            start_date: 1000,
+            end_date: None,
+            default_duration_minutes: 60,
+            color: None,
+            paused: false,
+            exclude_from_coverage: false,
+            default_host: Some(Principal::anonymous()),
+            created_at: 1000,
+            created_by: Principal::anonymous(),
+            allow_second_host: Some(true),
+            default_host_2: Some(Principal::anonymous()),
+        };
+        let bytes = Encode!(&old).unwrap();
+
+        let decoded = EventSeries::from_bytes(std::borrow::Cow::Owned(bytes));
+        assert_eq!(decoded.series_id, old.series_id);
+        assert_eq!(decoded.allow_second_host, old.allow_second_host);
+        assert_eq!(decoded.default_host_2, old.default_host_2);
+        assert_eq!(decoded.allow_third_host, None);
+        assert_eq!(decoded.default_host_3, None);
+    }
+
+    #[test]
+    fn two_host_era_event_instance_bytes_decode_with_third_host_fields_none() {
+        #[derive(CandidType, Deserialize)]
+        struct TwoHostEraEventInstance {
+            instance_id: [u8; 16],
+            series_id: Option<[u8; 16]>,
+            start_utc: u64,
+            end_utc: u64,
+            title: String,
+            notes: String,
+            link: Option<String>,
+            host_principal: Option<Principal>,
+            status: EventStatus,
+            color: Option<String>,
+            exclude_from_coverage: bool,
+            created_at: u64,
+            occurrence_start_utc: Option<u64>,
+            host_principal_2: Option<Principal>,
+            allow_second_host: Option<bool>,
+        }
+
+        let old = TwoHostEraEventInstance {
+            instance_id: [5u8; 16],
+            series_id: Some([4u8; 16]),
+            start_utc: 1000,
+            end_utc: 2000,
+            title: "Office Hours".to_string(),
+            notes: String::new(),
+            link: None,
+            host_principal: Some(Principal::anonymous()),
+            status: EventStatus::Active,
+            color: None,
+            exclude_from_coverage: false,
+            created_at: 1000,
+            occurrence_start_utc: Some(1000),
+            host_principal_2: Some(Principal::anonymous()),
+            allow_second_host: Some(true),
+        };
+        let bytes = Encode!(&old).unwrap();
+
+        let decoded = EventInstance::from_bytes(std::borrow::Cow::Owned(bytes));
+        assert_eq!(decoded.instance_id, old.instance_id);
+        assert_eq!(decoded.host_principal_2, old.host_principal_2);
+        assert_eq!(decoded.host_principal_3, None);
+        assert_eq!(decoded.allow_third_host, None);
+    }
+
+    #[test]
+    fn two_host_era_instance_override_bytes_decode_with_third_host_fields_none() {
+        #[derive(CandidType, Deserialize)]
+        struct TwoHostEraInstanceOverride {
+            series_id: [u8; 16],
+            occurrence_start_utc: u64,
+            start_utc: Option<u64>,
+            end_utc: Option<u64>,
+            notes: Option<String>,
+            host_principal: Option<Principal>,
+            host_cleared: bool,
+            cancelled: bool,
+            updated_at: u64,
+            updated_by: Principal,
+            host_principal_2: Option<Principal>,
+            host_2_cleared: Option<bool>,
+        }
+
+        let old = TwoHostEraInstanceOverride {
+            series_id: [6u8; 16],
+            occurrence_start_utc: 1000,
+            start_utc: None,
+            end_utc: None,
+            notes: None,
+            host_principal: Some(Principal::anonymous()),
+            host_cleared: false,
+            cancelled: false,
+            updated_at: 1000,
+            updated_by: Principal::anonymous(),
+            host_principal_2: Some(Principal::anonymous()),
+            host_2_cleared: Some(false),
+        };
+        let bytes = Encode!(&old).unwrap();
+
+        let decoded = InstanceOverride::from_bytes(std::borrow::Cow::Owned(bytes));
+        assert_eq!(decoded.series_id, old.series_id);
+        assert_eq!(decoded.host_principal_2, old.host_principal_2);
+        assert_eq!(decoded.host_principal_3, None);
+        assert_eq!(decoded.host_3_cleared, None);
     }
 }

@@ -21,6 +21,7 @@ const publicIdlFactory = ({ IDL }: { IDL: any }) => {
     'status': IDL.Variant({ 'Active': IDL.Null, 'Cancelled': IDL.Null }),
     'color': IDL.Opt(IDL.Text),
     'host_name_2': IDL.Opt(IDL.Text),
+    'host_name_3': IDL.Opt(IDL.Text),
   });
   const GlobalSettings = IDL.Record({
     'forward_window_months': IDL.Nat8,
@@ -56,6 +57,7 @@ interface PublicEvent {
   status: { Active: null } | { Cancelled: null };
   color: [string] | [];
   host_name_2: [string] | [];
+  host_name_3: [string] | [];
 }
 
 // First name only, for compact calendar bubbles
@@ -63,12 +65,13 @@ function firstName(fullName: string): string {
   return fullName.trim().split(/\s+/)[0] || fullName;
 }
 
-// Combined "First1 & First2" (or single name / "No host") host line for calendar bubbles
+// Combined "First1 & First2 & First3" (or single name / "No host") host line for calendar bubbles
 function hostLine(event: PublicEvent): { text: string; isNoHost: boolean; hasCoHost: boolean } {
   const host1 = event.host_name.length > 0 ? event.host_name[0] : undefined;
   const host2 = event.host_name_2.length > 0 ? event.host_name_2[0] : undefined;
-  if (!host1 && !host2) return { text: 'No host', isNoHost: true, hasCoHost: false };
-  const names = [host1, host2].filter((n): n is string => !!n).map(firstName);
+  const host3 = event.host_name_3.length > 0 ? event.host_name_3[0] : undefined;
+  if (!host1 && !host2 && !host3) return { text: 'No host', isNoHost: true, hasCoHost: false };
+  const names = [host1, host2, host3].filter((n): n is string => !!n).map(firstName);
   return { text: names.join(' & '), isNoHost: false, hasCoHost: names.length > 1 };
 }
 
@@ -511,6 +514,12 @@ export default function PublicCalendar() {
               <div style={pubModalStyles.detail}>
                 <span style={pubModalStyles.label}>CO-HOST</span>
                 <span style={pubModalStyles.value}>{selectedEvent.host_name_2[0]}</span>
+              </div>
+            )}
+            {selectedEvent.host_name_3.length > 0 && (
+              <div style={pubModalStyles.detail}>
+                <span style={pubModalStyles.label}>THIRD HOST</span>
+                <span style={pubModalStyles.value}>{selectedEvent.host_name_3[0]}</span>
               </div>
             )}
             {selectedEvent.notes && (

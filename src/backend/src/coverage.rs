@@ -4,8 +4,9 @@
 //! - Assigning host to a series instance creates/updates an override
 //! - Assigning host to a one-off instance updates the instance directly
 //! - OOO and disabled users cannot be assigned (except admin override)
-//! - Each instance has two host slots (Primary, Secondary); Secondary is only
-//!   usable when the instance's series has allow_second_host enabled
+//! - Each instance has up to three host slots (Primary, Secondary, Tertiary);
+//!   Secondary/Tertiary are only usable when the instance's series has
+//!   allow_second_host/allow_third_host enabled respectively
 
 use crate::auth;
 use crate::notifications;
@@ -44,6 +45,8 @@ fn blank_override(series_id: [u8; 16], occurrence_start_utc: u64, now: u64, call
         updated_by: caller,
         host_principal_2: None,
         host_2_cleared: None,
+        host_principal_3: None,
+        host_3_cleared: None,
     }
 }
 
@@ -52,6 +55,7 @@ fn instance_host_for_slot(inst: &EventInstance, slot: HostSlot) -> Option<Princi
     match slot {
         HostSlot::Primary => inst.host_principal,
         HostSlot::Secondary => inst.host_principal_2,
+        HostSlot::Tertiary => inst.host_principal_3,
     }
 }
 
@@ -76,17 +80,31 @@ pub fn assign_host(
         return Err(ApiError::Conflict("Claims are currently paused".to_string()));
     }
 
-    // Second-host slot requires the series to have it enabled (one-off events never do)
-    if slot == HostSlot::Secondary {
-        let allowed = series_id
-            .and_then(|sid| storage::get_series(&sid))
-            .map(|s| s.allow_second_host.unwrap_or(false))
-            .unwrap_or(false);
-        if !allowed {
-            return Err(ApiError::InvalidInput(
-                "This series does not allow a second host".to_string()
-            ));
+    // Secondary/Tertiary slots require the series to have them enabled (one-off events never do)
+    match slot {
+        HostSlot::Secondary => {
+            let allowed = series_id
+                .and_then(|sid| storage::get_series(&sid))
+                .map(|s| s.allow_second_host.unwrap_or(false))
+                .unwrap_or(false);
+            if !allowed {
+                return Err(ApiError::InvalidInput(
+                    "This series does not allow a second host".to_string()
+                ));
+            }
         }
+        HostSlot::Tertiary => {
+            let allowed = series_id
+                .and_then(|sid| storage::get_series(&sid))
+                .map(|s| s.allow_third_host.unwrap_or(false))
+                .unwrap_or(false);
+            if !allowed {
+                return Err(ApiError::InvalidInput(
+                    "This series does not allow a third host".to_string()
+                ));
+            }
+        }
+        HostSlot::Primary => {}
     }
 
     // Validate host exists and can be assigned
@@ -138,6 +156,10 @@ pub fn assign_host(
                 ovr.host_principal_2 = Some(host_principal);
                 ovr.host_2_cleared = Some(false);
             }
+            HostSlot::Tertiary => {
+                ovr.host_principal_3 = Some(host_principal);
+                ovr.host_3_cleared = Some(false);
+            }
         }
         ovr.updated_at = now;
         ovr.updated_by = caller;
@@ -155,6 +177,7 @@ pub fn assign_host(
         match slot {
             HostSlot::Primary => inst.host_principal = Some(host_principal),
             HostSlot::Secondary => inst.host_principal_2 = Some(host_principal),
+            HostSlot::Tertiary => inst.host_principal_3 = Some(host_principal),
         }
         storage::insert_instance(inst);
 
@@ -213,6 +236,10 @@ pub fn unassign_host(
                 ovr.host_principal_2 = None;
                 ovr.host_2_cleared = Some(true);
             }
+            HostSlot::Tertiary => {
+                ovr.host_principal_3 = None;
+                ovr.host_3_cleared = Some(true);
+            }
         }
         ovr.updated_at = now;
         ovr.updated_by = caller;
@@ -227,6 +254,7 @@ pub fn unassign_host(
         match slot {
             HostSlot::Primary => inst.host_principal = None,
             HostSlot::Secondary => inst.host_principal_2 = None,
+            HostSlot::Tertiary => inst.host_principal_3 = None,
         }
         storage::insert_instance(inst);
     }
@@ -288,6 +316,13 @@ pub fn cancel_instance(
             );
         }
     }
+    if let Some(host_principal_3) = ovr.host_principal_3 {
+        if let Some(host_user_3) = storage::get_user(&host_principal_3) {
+            notifications::create_instance_cancelled_notification(
+                &host_user_3, &instance_id, &series.title, event_start, event_end,
+            );
+        }
+    }
 
     ovr.cancelled = true;
     ovr.updated_at = now;
@@ -298,6 +333,7 @@ pub fn cancel_instance(
     let notes = ovr.notes.unwrap_or(series.notes.clone());
     let host_principal = if ovr.host_cleared { None } else { ovr.host_principal };
     let host_principal_2 = if ovr.host_2_cleared.unwrap_or(false) { None } else { ovr.host_principal_2 };
+    let host_principal_3 = if ovr.host_3_cleared.unwrap_or(false) { None } else { ovr.host_principal_3 };
 
     Ok(EventInstance {
         instance_id: recurrence::generate_instance_id(&series_id, occurrence_start),
@@ -315,6 +351,8 @@ pub fn cancel_instance(
         occurrence_start_utc: Some(occurrence_start),
         host_principal_2,
         allow_second_host: Some(series.allow_second_host.unwrap_or(false)),
+        host_principal_3,
+        allow_third_host: Some(series.allow_third_host.unwrap_or(false)),
     })
 }
 
@@ -384,6 +422,7 @@ fn get_event_instance(
         let notes = ovr.as_ref().and_then(|o| o.notes.clone()).unwrap_or(series.notes.clone());
         let host_principal = recurrence::effective_host(ovr.as_ref(), series.default_host, HostSlot::Primary);
         let host_principal_2 = recurrence::effective_host(ovr.as_ref(), series.default_host_2, HostSlot::Secondary);
+        let host_principal_3 = recurrence::effective_host(ovr.as_ref(), series.default_host_3, HostSlot::Tertiary);
 
         // Apply DST adjustment to match materialize_events() behavior
         let (adj_start, adj_end) = maybe_adjust_dst(start_utc, end_utc, series.start_date);
@@ -406,6 +445,8 @@ fn get_event_instance(
             occurrence_start_utc: Some(occ_start),
             host_principal_2,
             allow_second_host: Some(series.allow_second_host.unwrap_or(false)),
+            host_principal_3,
+            allow_third_host: Some(series.allow_third_host.unwrap_or(false)),
         })
     } else {
         storage::get_instance(instance_id).ok_or(ApiError::NotFound)

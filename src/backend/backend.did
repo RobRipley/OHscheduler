@@ -29,10 +29,12 @@ type CreateSeriesInput = record {
   end_date : opt nat64;
   start_date : nat64;
   default_host_2 : opt principal;
+  default_host_3 : opt principal;
   notes : text;
   weekday_ordinal : opt WeekdayOrdinal;
   allow_second_host : opt bool;
   frequency : Frequency;
+  allow_third_host : opt bool;
   exclude_from_coverage : opt bool;
   default_duration_minutes : opt nat32;
 };
@@ -50,8 +52,10 @@ type EventInstance = record {
   allow_second_host : opt bool;
   host_principal : opt principal;
   occurrence_start_utc : opt nat64;
+  allow_third_host : opt bool;
   exclude_from_coverage : bool;
   host_principal_2 : opt principal;
+  host_principal_3 : opt principal;
 };
 type EventSeries = record {
   title : text;
@@ -65,10 +69,12 @@ type EventSeries = record {
   created_by : principal;
   start_date : nat64;
   default_host_2 : opt principal;
+  default_host_3 : opt principal;
   notes : text;
   weekday_ordinal : opt WeekdayOrdinal;
   allow_second_host : opt bool;
   frequency : Frequency;
+  allow_third_host : opt bool;
   exclude_from_coverage : bool;
   paused : bool;
   default_duration_minutes : nat32;
@@ -85,7 +91,7 @@ type GlobalSettings = record {
   default_event_duration_minutes : nat32;
   forward_window_months : nat8;
 };
-type HostSlot = variant { Secondary; Primary };
+type HostSlot = variant { Secondary; Primary; Tertiary };
 type InviteCode = record {
   code : text;
   redeemed : bool;
@@ -146,6 +152,7 @@ type PublicEventView = record {
   host_name : opt text;
   notes : text;
   host_name_2 : opt text;
+  host_name_3 : opt text;
 };
 type Result = variant { Ok : EventInstance; Err : ApiError };
 type Result_1 = variant { Ok : User; Err : ApiError };
@@ -169,8 +176,10 @@ type UpdateSeriesInput = record {
   color : opt opt text;
   end_date : opt opt nat64;
   default_host_2 : opt opt principal;
+  default_host_3 : opt opt principal;
   notes : opt text;
   allow_second_host : opt bool;
+  allow_third_host : opt bool;
   exclude_from_coverage : opt bool;
   paused : opt bool;
   default_duration_minutes : opt nat32;

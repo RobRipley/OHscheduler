@@ -233,6 +233,9 @@ fn list_events_public(window_start: u64, window_end: u64) -> Vec<PublicEventView
         let host_name_2 = e.host_principal_2
             .and_then(|p| storage::get_user(&p))
             .map(|u| u.name);
+        let host_name_3 = e.host_principal_3
+            .and_then(|p| storage::get_user(&p))
+            .map(|u| u.name);
 
         PublicEventView {
             instance_id: e.instance_id.to_vec(),
@@ -245,6 +248,7 @@ fn list_events_public(window_start: u64, window_end: u64) -> Vec<PublicEventView
             status: e.status,
             color: e.color,
             host_name_2,
+            host_name_3,
         }
     }).collect()
 }
@@ -293,6 +297,8 @@ fn create_one_off_event(input: CreateEventInput) -> ApiResult<EventInstance> {
         occurrence_start_utc: None,
         host_principal_2: None,
         allow_second_host: Some(false),
+        host_principal_3: None,
+        allow_third_host: Some(false),
     };
 
     storage::insert_instance(instance.clone());
@@ -338,6 +344,8 @@ fn create_event_series(input: CreateSeriesInput) -> ApiResult<EventSeries> {
         created_by: admin.principal,
         allow_second_host: input.allow_second_host,
         default_host_2: input.default_host_2,
+        allow_third_host: input.allow_third_host,
+        default_host_3: input.default_host_3,
     };
     
     storage::insert_series(series.clone());
@@ -384,6 +392,12 @@ fn update_event_series(series_id: Vec<u8>, input: UpdateSeriesInput) -> ApiResul
     }
     if let Some(default_host_2) = input.default_host_2 {
         series.default_host_2 = default_host_2;
+    }
+    if let Some(allow_third_host) = input.allow_third_host {
+        series.allow_third_host = Some(allow_third_host);
+    }
+    if let Some(default_host_3) = input.default_host_3 {
+        series.default_host_3 = default_host_3;
     }
 
     storage::insert_series(series.clone());
