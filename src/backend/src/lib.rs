@@ -230,7 +230,10 @@ fn list_events_public(window_start: u64, window_end: u64) -> Vec<PublicEventView
         let host_name = e.host_principal
             .and_then(|p| storage::get_user(&p))
             .map(|u| u.name);
-        
+        let host_name_2 = e.host_principal_2
+            .and_then(|p| storage::get_user(&p))
+            .map(|u| u.name);
+
         PublicEventView {
             instance_id: e.instance_id.to_vec(),
             title: e.title,
@@ -241,6 +244,7 @@ fn list_events_public(window_start: u64, window_end: u64) -> Vec<PublicEventView
             host_name,
             status: e.status,
             color: e.color,
+            host_name_2,
         }
     }).collect()
 }
@@ -287,8 +291,10 @@ fn create_one_off_event(input: CreateEventInput) -> ApiResult<EventInstance> {
         exclude_from_coverage: false,
         created_at: now,
         occurrence_start_utc: None,
+        host_principal_2: None,
+        allow_second_host: Some(false),
     };
-    
+
     storage::insert_instance(instance.clone());
     Ok(instance)
 }
@@ -330,6 +336,8 @@ fn create_event_series(input: CreateSeriesInput) -> ApiResult<EventSeries> {
         default_host: input.default_host,
         created_at: now,
         created_by: admin.principal,
+        allow_second_host: input.allow_second_host,
+        default_host_2: input.default_host_2,
     };
     
     storage::insert_series(series.clone());
@@ -370,6 +378,12 @@ fn update_event_series(series_id: Vec<u8>, input: UpdateSeriesInput) -> ApiResul
     }
     if let Some(exclude) = input.exclude_from_coverage {
         series.exclude_from_coverage = exclude;
+    }
+    if let Some(allow_second_host) = input.allow_second_host {
+        series.allow_second_host = Some(allow_second_host);
+    }
+    if let Some(default_host_2) = input.default_host_2 {
+        series.default_host_2 = default_host_2;
     }
 
     storage::insert_series(series.clone());
@@ -413,24 +427,26 @@ fn assign_host(
     occurrence_start: Option<u64>,
     instance_id: Vec<u8>,
     host_principal: Principal,
+    slot: HostSlot,
 ) -> ApiResult<EventInstance> {
     let user = auth::require_authorized()?;
     auth::touch_last_active(&user.principal);
-    
+
     let sid = series_id
         .map(|v| v.try_into().map_err(|_| ApiError::InvalidInput("Invalid series_id".to_string())))
         .transpose()?;
-    
+
     let iid: [u8; 16] = instance_id.try_into()
         .map_err(|_| ApiError::InvalidInput("Invalid instance_id".to_string()))?;
-    
+
     let is_admin = user.role == Role::Admin;
-    
+
     coverage::assign_host(
         sid,
         occurrence_start,
         iid,
         host_principal,
+        slot,
         user.principal,
         is_admin,
     )
@@ -460,20 +476,22 @@ fn unassign_host(
     series_id: Option<Vec<u8>>,
     occurrence_start: Option<u64>,
     instance_id: Vec<u8>,
+    slot: HostSlot,
 ) -> ApiResult<EventInstance> {
     let user = auth::require_authorized()?;
-    
+
     let sid = series_id
         .map(|v| v.try_into().map_err(|_| ApiError::InvalidInput("Invalid series_id".to_string())))
         .transpose()?;
-    
+
     let iid: [u8; 16] = instance_id.try_into()
         .map_err(|_| ApiError::InvalidInput("Invalid instance_id".to_string()))?;
-    
+
     coverage::unassign_host(
         sid,
         occurrence_start,
         iid,
+        slot,
         user.principal,
     )
 }

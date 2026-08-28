@@ -20,6 +20,7 @@ const publicIdlFactory = ({ IDL }: { IDL: any }) => {
     'host_name': IDL.Opt(IDL.Text),
     'status': IDL.Variant({ 'Active': IDL.Null, 'Cancelled': IDL.Null }),
     'color': IDL.Opt(IDL.Text),
+    'host_name_2': IDL.Opt(IDL.Text),
   });
   const GlobalSettings = IDL.Record({
     'forward_window_months': IDL.Nat8,
@@ -54,7 +55,24 @@ interface PublicEvent {
   host_name: [string] | [];
   status: { Active: null } | { Cancelled: null };
   color: [string] | [];
+  host_name_2: [string] | [];
 }
+
+// First name only, for compact calendar bubbles
+function firstName(fullName: string): string {
+  return fullName.trim().split(/\s+/)[0] || fullName;
+}
+
+// Combined "First1 & First2" (or single name / "No host") host line for calendar bubbles
+function hostLine(event: PublicEvent): { text: string; isNoHost: boolean; hasCoHost: boolean } {
+  const host1 = event.host_name.length > 0 ? event.host_name[0] : undefined;
+  const host2 = event.host_name_2.length > 0 ? event.host_name_2[0] : undefined;
+  if (!host1 && !host2) return { text: 'No host', isNoHost: true, hasCoHost: false };
+  const names = [host1, host2].filter((n): n is string => !!n).map(firstName);
+  return { text: names.join(' & '), isNoHost: false, hasCoHost: names.length > 1 };
+}
+
+const coHostIconStyle: React.CSSProperties = { fontSize: '10px', opacity: 0.7, marginRight: '3px' };
 
 export default function PublicCalendar() {
   const [events, setEvents] = useState<PublicEvent[]>([]);
@@ -406,9 +424,8 @@ export default function PublicCalendar() {
                       </div>
                       <div style={styles.dayCellEvents}>
                         {dayEvents.filter(e => 'Active' in e.status).slice(0, 4).map((event, idx) => {
-                          const isNoHost = event.host_name.length === 0;
-                          const hostName = isNoHost ? 'No host' : event.host_name[0];
-                          const color = isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title, event.color?.[0]);
+                          const host = hostLine(event);
+                          const color = host.isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title, event.color?.[0]);
                           return (
                             <div key={idx} style={{
                               ...styles.eventCard,
@@ -418,8 +435,9 @@ export default function PublicCalendar() {
                             }} onClick={() => setSelectedEvent(event)} className="event-card-hover">
                               <div style={styles.eventTitle}>{event.title}</div>
                               <div style={styles.eventTime}>{formatTime(event.start_utc)}</div>
-                              <div style={isNoHost ? styles.eventHostNoHost : styles.eventHost}>
-                                {hostName}
+                              <div style={host.isNoHost ? styles.eventHostNoHost : styles.eventHost}>
+                                {host.hasCoHost && <span title="Multiple hosts" style={coHostIconStyle}>👥</span>}
+                                {host.text}
                               </div>
                             </div>
                           );
@@ -447,17 +465,18 @@ export default function PublicCalendar() {
                 const dateStr = new Date(Number(event.start_utc / BigInt(1_000_000))).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: timezone });
                 const showDate = dateStr !== lastDate;
                 lastDate = dateStr;
-                const isNoHost = event.host_name.length === 0;
-                const color = isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title, event.color?.[0]);
+                const host = hostLine(event);
+                const color = host.isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title, event.color?.[0]);
                 return (
                   <div key={idx}>
                     {showDate && <div style={styles.agendaDate}>{dateStr}</div>}
                     <div style={{ ...styles.agendaItem, borderLeftColor: color.border }} onClick={() => setSelectedEvent(event)}>
                       <div style={styles.agendaTime}>{formatTime(event.start_utc)}</div>
-                      <div style={{ flex: 1 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={styles.agendaTitle}>{event.title}</div>
-                        <div style={{ fontSize: '12px', color: isNoHost ? '#F87171' : theme.accent }}>
-                          {isNoHost ? 'No host' : event.host_name[0]}
+                        <div style={{ fontSize: '12px', color: host.isNoHost ? '#F87171' : theme.accent, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {host.hasCoHost && <span title="Multiple hosts" style={coHostIconStyle}>👥</span>}
+                          {host.text}
                         </div>
                       </div>
                     </div>
@@ -488,6 +507,12 @@ export default function PublicCalendar() {
                 {selectedEvent.host_name.length > 0 ? selectedEvent.host_name[0] : 'No host assigned'}
               </span>
             </div>
+            {selectedEvent.host_name_2.length > 0 && (
+              <div style={pubModalStyles.detail}>
+                <span style={pubModalStyles.label}>CO-HOST</span>
+                <span style={pubModalStyles.value}>{selectedEvent.host_name_2[0]}</span>
+              </div>
+            )}
             {selectedEvent.notes && (
               <div style={pubModalStyles.detail}>
                 <span style={pubModalStyles.label}>NOTES</span>

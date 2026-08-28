@@ -1,254 +1,287 @@
-// Auto-generated Candid interface
-// This will be replaced by dfx generate after first build
-
-type Role = variant { Admin; User };
-type UserStatus = variant { Active; Disabled };
-type Frequency = variant { Weekly; Biweekly; Monthly };
-type Weekday = variant { Mon; Tue; Wed; Thu; Fri; Sat; Sun };
-type WeekdayOrdinal = variant { First; Second; Third; Fourth; Last };
-type EventStatus = variant { Active; Cancelled };
-type NotificationType = variant {
-    HostAssigned;
-    HostRemoved;
-    InstanceTimeChanged;
-    InstanceCancelled;
-    UnclaimedReminder;
-    CoverageNeededSoon;
-    DailyDigest;
-    WeeklyDigest;
-};
-type NotificationStatus = variant { Pending; Sent; Failed };
-
-type OOOBlock = record {
-    start_utc: nat64;
-    end_utc: nat64;
-};
-
-type NotificationSettings = record {
-    email_on_assigned: bool;
-    email_on_removed: bool;
-    email_on_cancelled: bool;
-    email_on_time_changed: bool;
-    email_unclaimed_reminder: bool;
-    reminder_hours_before: opt nat32;
-};
-
-type User = record {
-    "principal": principal;
-    name: text;
-    email: text;
-    role: Role;
-    status: UserStatus;
-    out_of_office: vec OOOBlock;
-    notification_settings: NotificationSettings;
-    last_active: nat64;
-    sessions_hosted_count: nat32;
-    created_at: nat64;
-    updated_at: nat64;
-};
-
-type EventSeries = record {
-    series_id: blob;
-    title: text;
-    notes: text;
-    link: opt text;
-    frequency: Frequency;
-    weekday: Weekday;
-    weekday_ordinal: opt WeekdayOrdinal;
-    start_date: nat64;
-    end_date: opt nat64;
-    default_duration_minutes: nat32;
-    color: opt text;
-    paused: bool;
-    default_host: opt principal;
-    exclude_from_coverage: bool;
-    created_at: nat64;
-    created_by: principal;
-};
-
-type EventInstance = record {
-    instance_id: blob;
-    series_id: opt blob;
-    start_utc: nat64;
-    end_utc: nat64;
-    title: text;
-    notes: text;
-    link: opt text;
-    host_principal: opt principal;
-    status: EventStatus;
-    color: opt text;
-    exclude_from_coverage: bool;
-    created_at: nat64;
-    occurrence_start_utc: opt nat64;
-};
-
-type GlobalSettings = record {
-    forward_window_months: nat8;
-    claims_paused: bool;
-    default_event_duration_minutes: nat32;
-    org_name: opt text;
-    org_tagline: opt text;
-    org_logo_url: opt text;
-    ignore_dst: bool;
-    dst_utc_offset_minutes: opt int16;
-};
-
-type NotificationJob = record {
-    job_id: blob;
-    created_at: nat64;
-    notification_type: NotificationType;
-    recipient_principal: principal;
-    recipient_email: text;
-    subject: text;
-    body_text: text;
-    ics_payload: opt text;
-    status: NotificationStatus;
-    sent_at: opt nat64;
-    error_message: opt text;
-};
-
-type PublicEventView = record {
-    instance_id: blob;
-    title: text;
-    notes: text;
-    link: opt text;
-    start_utc: nat64;
-    end_utc: nat64;
-    host_name: opt text;
-    status: EventStatus;
-    color: opt text;
-};
-
-type CreateEventInput = record {
-    title: text;
-    notes: text;
-    start_utc: nat64;
-    end_utc: nat64;
-    host_principal: opt principal;
-};
-
-type CreateSeriesInput = record {
-    title: text;
-    notes: text;
-    frequency: Frequency;
-    weekday: Weekday;
-    weekday_ordinal: opt WeekdayOrdinal;
-    start_date: nat64;
-    end_date: opt nat64;
-    default_duration_minutes: opt nat32;
-    color: opt text;
-    default_host: opt principal;
-    exclude_from_coverage: opt bool;
-};
-
-type UpdateSeriesInput = record {
-    title: opt text;
-    notes: opt text;
-    end_date: opt opt nat64;
-    default_duration_minutes: opt nat32;
-    color: opt opt text;
-    paused: opt bool;
-    default_host: opt opt principal;
-    exclude_from_coverage: opt bool;
-};
-
 type ApiError = variant {
-    Unauthorized;
-    NotFound;
-    InvalidInput: text;
-    Conflict: text;
-    InternalError: text;
+  InvalidInput : text;
+  NotFound;
+  Unauthorized;
+  InternalError : text;
+  Conflict : text;
 };
-
+type CoverageStats = record {
+  total_sessions : nat32;
+  assigned : nat32;
+  period_label : text;
+  unassigned : nat32;
+  coverage_pct : float64;
+};
+type CreateEventInput = record {
+  start_utc : nat64;
+  title : text;
+  end_utc : nat64;
+  link : opt text;
+  notes : text;
+  host_principal : opt principal;
+};
+type CreateSeriesInput = record {
+  title : text;
+  default_host : opt principal;
+  weekday : Weekday;
+  link : opt text;
+  color : opt text;
+  end_date : opt nat64;
+  start_date : nat64;
+  default_host_2 : opt principal;
+  notes : text;
+  weekday_ordinal : opt WeekdayOrdinal;
+  allow_second_host : opt bool;
+  frequency : Frequency;
+  exclude_from_coverage : opt bool;
+  default_duration_minutes : opt nat32;
+};
+type EventInstance = record {
+  status : EventStatus;
+  start_utc : nat64;
+  title : text;
+  instance_id : blob;
+  end_utc : nat64;
+  series_id : opt blob;
+  link : opt text;
+  color : opt text;
+  created_at : nat64;
+  notes : text;
+  allow_second_host : opt bool;
+  host_principal : opt principal;
+  occurrence_start_utc : opt nat64;
+  exclude_from_coverage : bool;
+  host_principal_2 : opt principal;
+};
+type EventSeries = record {
+  title : text;
+  default_host : opt principal;
+  weekday : Weekday;
+  series_id : blob;
+  link : opt text;
+  color : opt text;
+  end_date : opt nat64;
+  created_at : nat64;
+  created_by : principal;
+  start_date : nat64;
+  default_host_2 : opt principal;
+  notes : text;
+  weekday_ordinal : opt WeekdayOrdinal;
+  allow_second_host : opt bool;
+  frequency : Frequency;
+  exclude_from_coverage : bool;
+  paused : bool;
+  default_duration_minutes : nat32;
+};
+type EventStatus = variant { Active; Cancelled };
+type Frequency = variant { Weekly; Monthly; Biweekly };
+type GlobalSettings = record {
+  org_logo_url : opt text;
+  claims_paused : bool;
+  ignore_dst : bool;
+  org_name : opt text;
+  dst_utc_offset_minutes : opt int16;
+  org_tagline : opt text;
+  default_event_duration_minutes : nat32;
+  forward_window_months : nat8;
+};
+type HostSlot = variant { Secondary; Primary };
 type InviteCode = record {
-    code: text;
-    role: Role;
-    created_at: nat64;
-    created_by: principal;
-    expires_at: nat64;
-    redeemed: bool;
-    redeemed_by: opt principal;
-    redeemed_at: opt nat64;
-    user_placeholder_principal: opt principal;
+  code : text;
+  redeemed : bool;
+  role : Role;
+  created_at : nat64;
+  created_by : principal;
+  redeemed_at : opt nat64;
+  redeemed_by : opt principal;
+  user_placeholder_principal : opt principal;
+  expires_at : nat64;
 };
-
-type Result_User = variant { Ok: User; Err: ApiError };
-type Result_Vec_User = variant { Ok: vec User; Err: ApiError };
-
-type UserDirectoryEntry = record {
-    "principal": principal;
-    name: text;
-    role: Role;
-    status: UserStatus;
-};
-type Result_Vec_UserDirectoryEntry = variant { Ok: vec UserDirectoryEntry; Err: ApiError };
-type Result_Unit = variant { Ok; Err: ApiError };
-type Result_Vec_EventInstance = variant { Ok: vec EventInstance; Err: ApiError };
-type Result_EventInstance = variant { Ok: EventInstance; Err: ApiError };
-type Result_EventSeries = variant { Ok: EventSeries; Err: ApiError };
-type Result_Vec_EventSeries = variant { Ok: vec EventSeries; Err: ApiError };
-type Result_GlobalSettings = variant { Ok: GlobalSettings; Err: ApiError };
-type Result_Vec_NotificationJob = variant { Ok: vec NotificationJob; Err: ApiError };
-type Result_String = variant { Ok: text; Err: ApiError };
-type Result_InviteCode = variant { Ok: InviteCode; Err: ApiError };
-type Result_Vec_InviteCode = variant { Ok: vec InviteCode; Err: ApiError };
-
 type InviteCodeInfo = record {
-    is_personal : bool;
-    prefilled_name : opt text;
-    prefilled_email : opt text;
+  is_personal : bool;
+  prefilled_email : opt text;
+  prefilled_name : opt text;
 };
-type Result_InviteCodeInfo = variant { Ok: InviteCodeInfo; Err: ApiError };
-
-service : {
-    // Auth / User
-    get_current_user : () -> (Result_User) query;
-    whoami : () -> (principal) query;
-    update_notification_settings : (NotificationSettings) -> (Result_Unit);
-    set_out_of_office : (vec OOOBlock) -> (Result_Unit);
-
-    // Admin - Users
-    list_users : () -> (Result_Vec_User) query;
-    list_user_directory : () -> (Result_Vec_UserDirectoryEntry) query;
-    authorize_user : (principal, text, text, Role) -> (Result_User);
-    disable_user : (principal) -> (Result_Unit);
-    enable_user : (principal) -> (Result_Unit);
-    update_user : (principal, text, text, Role) -> (Result_User);
-    delete_user : (principal) -> (Result_Unit);
-
-    // Events - Public
-    list_events_public : (nat64, nat64) -> (vec PublicEventView) query;
-    get_event_ics_public : (blob) -> (Result_String) query;
-
-    // Events - Authenticated
-    list_events : (nat64, nat64) -> (Result_Vec_EventInstance) query;
-    list_unclaimed_events : () -> (Result_Vec_EventInstance) query;
-    create_one_off_event : (CreateEventInput) -> (Result_EventInstance);
-
-    // Event Series (Admin)
-    create_event_series : (CreateSeriesInput) -> (Result_EventSeries);
-    update_event_series : (blob, UpdateSeriesInput) -> (Result_EventSeries);
-    delete_event_series : (blob) -> (Result_Unit);
-    list_event_series : () -> (Result_Vec_EventSeries) query;
-
-    // Coverage Queue
-    assign_host : (opt blob, opt nat64, blob, principal) -> (Result_EventInstance);
-    unassign_host : (opt blob, opt nat64, blob) -> (Result_EventInstance);
-    cancel_instance : (blob, nat64, blob) -> (Result_EventInstance);
-
-    // Admin - System
-    update_global_settings : (GlobalSettings) -> (Result_Unit);
-    get_global_settings : () -> (Result_GlobalSettings) query;
-
-    // Notifications
-    list_pending_notifications : () -> (Result_Vec_NotificationJob) query;
-    mark_notification_sent : (blob) -> (Result_Unit);
-    get_event_ics : (blob) -> (Result_String) query;
-
-    // Invite Codes
-    generate_invite_code : (Role) -> (Result_InviteCode);
-    generate_personal_invite_code : (principal) -> (Result_InviteCode);
-    check_invite_code : (text) -> (Result_InviteCodeInfo) query;
-    redeem_invite_code : (text, text, text) -> (Result_User);
-    list_invite_codes : () -> (Result_Vec_InviteCode) query;
+type NotificationJob = record {
+  status : NotificationStatus;
+  ics_payload : opt text;
+  subject : text;
+  body_text : text;
+  error_message : opt text;
+  recipient_email : text;
+  created_at : nat64;
+  recipient_principal : principal;
+  notification_type : NotificationType;
+  job_id : blob;
+  sent_at : opt nat64;
+};
+type NotificationSettings = record {
+  email_on_removed : bool;
+  email_unclaimed_reminder : bool;
+  email_on_assigned : bool;
+  email_on_time_changed : bool;
+  reminder_hours_before : opt nat32;
+  email_on_cancelled : bool;
+};
+type NotificationStatus = variant { Failed; Sent; Pending };
+type NotificationType = variant {
+  HostRemoved;
+  InstanceCancelled;
+  HostAssigned;
+  DailyDigest;
+  UnclaimedReminder;
+  CoverageNeededSoon;
+  InstanceTimeChanged;
+  WeeklyDigest;
+};
+type OOOBlock = record { start_utc : nat64; end_utc : nat64 };
+type PublicEventView = record {
+  status : EventStatus;
+  start_utc : nat64;
+  title : text;
+  instance_id : blob;
+  end_utc : nat64;
+  link : opt text;
+  color : opt text;
+  host_name : opt text;
+  notes : text;
+  host_name_2 : opt text;
+};
+type Result = variant { Ok : EventInstance; Err : ApiError };
+type Result_1 = variant { Ok : User; Err : ApiError };
+type Result_10 = variant { Ok : vec EventInstance; Err : ApiError };
+type Result_11 = variant { Ok : vec InviteCode; Err : ApiError };
+type Result_12 = variant { Ok : vec NotificationJob; Err : ApiError };
+type Result_13 = variant { Ok : vec UserDirectoryEntry; Err : ApiError };
+type Result_14 = variant { Ok : vec User; Err : ApiError };
+type Result_2 = variant { Ok : InviteCodeInfo; Err : ApiError };
+type Result_3 = variant { Ok : EventSeries; Err : ApiError };
+type Result_4 = variant { Ok; Err : ApiError };
+type Result_5 = variant { Ok : text; Err : ApiError };
+type Result_6 = variant { Ok : InviteCode; Err : ApiError };
+type Result_7 = variant { Ok : vec CoverageStats; Err : ApiError };
+type Result_8 = variant { Ok : GlobalSettings; Err : ApiError };
+type Result_9 = variant { Ok : vec EventSeries; Err : ApiError };
+type Role = variant { User; Admin };
+type UpdateSeriesInput = record {
+  title : opt text;
+  default_host : opt opt principal;
+  color : opt opt text;
+  end_date : opt opt nat64;
+  default_host_2 : opt opt principal;
+  notes : opt text;
+  allow_second_host : opt bool;
+  exclude_from_coverage : opt bool;
+  paused : opt bool;
+  default_duration_minutes : opt nat32;
+};
+type User = record {
+  status : UserStatus;
+  updated_at : nat64;
+  "principal" : principal;
+  out_of_office : vec OOOBlock;
+  name : text;
+  role : Role;
+  sessions_hosted_count : nat32;
+  created_at : nat64;
+  last_active : nat64;
+  email : text;
+  notification_settings : NotificationSettings;
+};
+type UserDirectoryEntry = record {
+  status : UserStatus;
+  "principal" : principal;
+  name : text;
+  role : Role;
+};
+type UserStatus = variant { Active; Disabled };
+type Weekday = variant { Fri; Mon; Sat; Sun; Thu; Tue; Wed };
+type WeekdayOrdinal = variant { Last; Fourth; First; Second; Third };
+service : () -> {
+  // Assign a host to an event instance
+  // series_id and occurrence_start are needed for series instances
+  // instance_id is used for one-off events
+  assign_host : (opt blob, opt nat64, blob, principal, HostSlot) -> (Result);
+  // Authorize a new user (admin only)
+  authorize_user : (principal, text, text, Role) -> (Result_1);
+  // Cancel a single instance of a recurring series (admin only)
+  cancel_instance : (blob, nat64, blob) -> (Result);
+  // Check an invite code without redeeming it.
+  // Returns whether the code is personal (has a pre-created user with name/email).
+  // No auth required since the person checking hasn't been authorized yet.
+  check_invite_code : (text) -> (Result_2) query;
+  // Create a recurring event series (admin only)
+  create_event_series : (CreateSeriesInput) -> (Result_3);
+  // Create a one-off event
+  create_one_off_event : (CreateEventInput) -> (Result);
+  // Delete a recurring event series (admin only)
+  delete_event_series : (blob) -> (Result_4);
+  // Delete a user (admin only)
+  delete_user : (principal) -> (Result_4);
+  // Disable a user (admin only)
+  disable_user : (principal) -> (Result_4);
+  // Enable a user (admin only)
+  enable_user : (principal) -> (Result_4);
+  // Export events as CSV (admin only)
+  export_events_csv : (nat64, nat64) -> (Result_5) query;
+  // Generate a standalone invite code (admin only).
+  // The code encodes a role. When redeemed, the user provides their own name/email.
+  // Uses raw_rand() for cryptographic randomness — must be an update call.
+  generate_invite_code : (Role) -> (Result_6);
+  // Generate a personal invite code tied to a specific pre-created user (admin only).
+  // When redeemed, the caller's II principal replaces the placeholder principal on the existing user.
+  generate_personal_invite_code : (principal) -> (Result_6);
+  // Get coverage history for past N months (admin only)
+  get_coverage_history : (nat8) -> (Result_7) query;
+  // Get the current authenticated user
+  // Returns Unauthorized if caller is not in whitelist
+  get_current_user : () -> (Result_1) query;
+  // Get ICS content for an event (for UI download)
+  get_event_ics : (blob) -> (Result_5) query;
+  // Get ICS content for an event (public, no auth required)
+  get_event_ics_public : (blob) -> (Result_5) query;
+  // Get global settings
+  get_global_settings : () -> (Result_8) query;
+  // Get org settings for public calendar (no auth required)
+  get_org_settings : () -> (GlobalSettings) query;
+  // List all event series (admin only)
+  list_event_series : () -> (Result_9) query;
+  // List events for authenticated users
+  list_events : (nat64, nat64) -> (Result_10) query;
+  // List events for public calendar (no auth required)
+  list_events_public : (nat64, nat64) -> (vec PublicEventView) query;
+  // List all invite codes (admin only)
+  list_invite_codes : () -> (Result_11) query;
+  // List pending notifications (for external worker)
+  list_pending_notifications : () -> (Result_12) query;
+  // List unclaimed events within forward window
+  list_unclaimed_events : () -> (Result_10) query;
+  // List user directory (any authorized user) — returns name + principal + role + status only
+  list_user_directory : () -> (Result_13) query;
+  // List all users (admin only)
+  list_users : () -> (Result_14) query;
+  // Mark a notification as sent (for external worker)
+  mark_notification_sent : (blob) -> (Result_4);
+  // Redeem an invite code.
+  // - Personal codes (tied to a pre-created user): swaps placeholder principal → caller's II principal.
+  // Name and email params are ignored since the user already has them.
+  // - Generic codes (role-only): creates a new user with the caller's principal, name, and email.
+  // Caller must be authenticated via II but does NOT need to be authorized.
+  redeem_invite_code : (text, text, text) -> (Result_1);
+  // Set out-of-office blocks for the current user
+  set_out_of_office : (vec OOOBlock) -> (Result_4);
+  // Toggle pause/resume on a series (admin only)
+  toggle_series_pause : (blob) -> (Result_3);
+  // Unassign host from an event instance
+  unassign_host : (opt blob, opt nat64, blob, HostSlot) -> (Result);
+  // Update a recurring event series (admin only)
+  update_event_series : (blob, UpdateSeriesInput) -> (Result_3);
+  // Update global settings (admin only)
+  update_global_settings : (GlobalSettings) -> (Result_4);
+  // Update notification settings for the current user
+  update_notification_settings : (NotificationSettings) -> (Result_4);
+  // Update user info (admin only)
+  update_user : (principal, text, text, Role) -> (Result_1);
+  // Get caller's principal (useful for "Not Authorized" page)
+  whoami : () -> (principal) query;
 }

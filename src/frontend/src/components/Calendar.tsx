@@ -12,6 +12,23 @@ interface CalendarEvent extends EventInstance {
   dateKey: string;
 }
 
+// First name only, for compact calendar bubbles
+function firstName(fullName: string): string {
+  return fullName.trim().split(/\s+/)[0] || fullName;
+}
+
+// Combined "First1 & First2" (or single name / "No host") host line for calendar bubbles
+function hostLine(event: EventInstance, users: Map<string, UserDirectoryEntry>): { text: string; isNoHost: boolean; hasCoHost: boolean } {
+  const host1 = event.host_principal.length > 0 ? users.get(event.host_principal[0]?.toText() ?? '')?.name : undefined;
+  const host2 = event.host_principal_2.length > 0 ? users.get(event.host_principal_2[0]?.toText() ?? '')?.name : undefined;
+  if (!host1 && !host2) return { text: 'No host', isNoHost: true, hasCoHost: false };
+  const names = [host1, host2].filter((n): n is string => !!n).map(firstName);
+  return { text: names.join(' & '), isNoHost: false, hasCoHost: names.length > 1 };
+}
+
+// Small inline badge marking a multi-host event, sized like the meeting-link icon
+const coHostIconStyle: React.CSSProperties = { fontSize: '10px', opacity: 0.7, marginRight: '3px' };
+
 export default function Calendar() {
   const { actor, loading: actorLoading, triggerSessionExpired } = useBackend();
   const { user } = useAuth();
@@ -280,9 +297,8 @@ export default function Calendar() {
             const dateStr = eventDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: timezone });
             const showDate = dateStr !== lastDate;
             lastDate = dateStr;
-            const isNoHost = event.host_principal.length === 0;
-            const hostName = getHostName(event.host_principal);
-            const color = isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title, event.color?.[0]);
+            const host = hostLine(event, users);
+            const color = host.isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title, event.color?.[0]);
             return (
               <div key={bytesToHex(event.instance_id as number[])}>
                 {showDate && (
@@ -305,7 +321,10 @@ export default function Calendar() {
                   </div>
                   <div style={modalStyles.agendaInfo}>
                     <div style={modalStyles.agendaTitle}>{event.title}</div>
-                    <div style={isNoHost ? modalStyles.agendaHostNoHost : modalStyles.agendaHost}>{isNoHost ? '+ Assign host' : hostName}</div>
+                    <div style={host.isNoHost ? modalStyles.agendaHostNoHost : modalStyles.agendaHost}>
+                      {host.hasCoHost && <span title="Multiple hosts" style={coHostIconStyle}>👥</span>}
+                      {host.isNoHost ? '+ Assign host' : host.text}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -340,9 +359,8 @@ export default function Calendar() {
                     </div>
                     <div style={styles.dayCellEvents}>
                       {dayEvents.slice(0, 4).map(event => {
-                        const isNoHost = event.host_principal.length === 0;
-                        const hostName = getHostName(event.host_principal);
-                        const color = isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title, event.color?.[0]);
+                        const host = hostLine(event, users);
+                        const color = host.isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title, event.color?.[0]);
                         return (
                           <div
                             key={bytesToHex(event.instance_id as number[])}
@@ -363,8 +381,9 @@ export default function Calendar() {
                             <div style={styles.monthEventTime}>
                               {formatTimeInTz(event.start_utc)}
                             </div>
-                            <div style={isNoHost ? styles.monthEventHostNoHost : styles.monthEventHost}>
-                              {isNoHost ? '+ Assign host' : hostName}
+                            <div style={host.isNoHost ? styles.monthEventHostNoHost : styles.monthEventHost}>
+                              {host.hasCoHost && <span title="Multiple hosts" style={coHostIconStyle}>👥</span>}
+                              {host.isNoHost ? '+ Assign host' : host.text}
                             </div>
                           </div>
                         );
@@ -397,8 +416,8 @@ export default function Calendar() {
                     <div style={styles.noEvents}>—</div>
                   ) : (
                     dayEvents.map(event => {
-                      const isNoHost = event.host_principal.length === 0;
-                      const color = isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title, event.color?.[0]);
+                      const host = hostLine(event, users);
+                      const color = host.isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title, event.color?.[0]);
                       return (
                       <div
                         key={bytesToHex(event.instance_id as number[])}
@@ -415,7 +434,10 @@ export default function Calendar() {
                           {formatTimeInTz(event.start_utc)}
                         </div>
                         <div style={styles.eventTitle}>{event.title}</div>
-                        <div style={isNoHost ? styles.eventHostNoHost : styles.eventHost}>{isNoHost ? '+ Assign host' : getHostName(event.host_principal)}</div>
+                        <div style={host.isNoHost ? styles.eventHostNoHost : styles.eventHost}>
+                          {host.hasCoHost && <span title="Multiple hosts" style={coHostIconStyle}>👥</span>}
+                          {host.isNoHost ? '+ Assign host' : host.text}
+                        </div>
                       </div>
                       );
                     })
@@ -439,9 +461,8 @@ export default function Calendar() {
               const dateStr = eventDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: timezone });
               const showDate = dateStr !== lastDate;
               lastDate = dateStr;
-              const isNoHost = event.host_principal.length === 0;
-              const hostName = getHostName(event.host_principal);
-              const color = isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title, event.color?.[0]);
+              const host = hostLine(event, users);
+              const color = host.isNoHost ? NO_HOST_COLOR : getSeriesColor(event.title, event.color?.[0]);
               const isPast = eventDate < new Date();
               return (
                 <div key={bytesToHex(event.instance_id as number[])}>
@@ -469,7 +490,10 @@ export default function Calendar() {
                     </div>
                     <div style={styles.agendaInfo}>
                       <div style={styles.agendaTitle}>{event.title}</div>
-                      <div style={isNoHost ? styles.agendaHostNoHost : styles.agendaHost}>{isNoHost ? '+ Assign host' : hostName}</div>
+                      <div style={host.isNoHost ? modalStyles.agendaHostNoHost : modalStyles.agendaHost}>
+                        {host.hasCoHost && <span title="Multiple hosts" style={coHostIconStyle}>👥</span>}
+                        {host.isNoHost ? '+ Assign host' : host.text}
+                      </div>
                     </div>
                     {event.link && event.link.length > 0 && (
                       <span style={{ fontSize: '12px', opacity: 0.5 }} title="Has meeting link">🔗</span>
@@ -522,9 +546,15 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
   const [actionError, setActionError] = useState<string | null>(null);
   const [icsLoading, setIcsLoading] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const [selectedUserId2, setSelectedUserId2] = useState<string>('');
+  const [showAddCoHost, setShowAddCoHost] = useState(false);
   const { timezone, abbrev } = useTimezone();
   const confirm = useConfirm();
   const hasHost = event.host_principal.length > 0;
+  const allowSecondHost = event.allow_second_host.length > 0 ? event.allow_second_host[0]! : false;
+  const hasHost2 = event.host_principal_2.length > 0;
+  const host2Name = hasHost2 ? (users.get(event.host_principal_2[0]?.toText() ?? '')?.name || 'Unknown') : '';
+  const isHost2 = hasHost2 && currentUser?.principal?.toText() === event.host_principal_2[0]?.toText();
 
   const formatTimeInTz = (nanos: bigint) => {
     return nanosToDate(nanos).toLocaleTimeString('en-US', {
@@ -569,7 +599,8 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
         event.series_id,
         (event.series_id && event.series_id.length > 0) ? [event.occurrence_start_utc.length > 0 ? event.occurrence_start_utc[0] : event.start_utc] : [],
         event.instance_id,
-        selectedUser.principal
+        selectedUser.principal,
+        { Primary: null }
       );
       if ('Ok' in result) onRefresh();
       else setActionError(getErrorMessage(result.Err));
@@ -592,7 +623,8 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
       const result = await actor.unassign_host(
         event.series_id,
         (event.series_id && event.series_id.length > 0) ? [event.occurrence_start_utc.length > 0 ? event.occurrence_start_utc[0] : event.start_utc] : [],
-        event.instance_id
+        event.instance_id,
+        { Primary: null }
       );
       if ('Ok' in result) onRefresh();
       else setActionError(getErrorMessage(result.Err));
@@ -602,6 +634,72 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
         setActionError('Your session has expired. Please sign in again.');
       } else {
         setActionError('Failed to remove host');
+      }
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleAssignHost2 = async () => {
+    if (!selectedUserId2) {
+      setActionError('Please select a co-host');
+      return;
+    }
+    const selectedUser = users.get(selectedUserId2);
+    if (!selectedUser) return;
+
+    if (hasHost2 && selectedUser.principal.toText() !== event.host_principal_2[0]?.toText()) {
+      const confirmed = await confirm({
+        title: 'Reassign co-host?',
+        message: `This shift's co-host slot is currently assigned to ${host2Name}. Reassigning will remove them and they'll be notified.`,
+        confirmLabel: 'Reassign',
+        variant: 'default',
+      });
+      if (!confirmed) return;
+    }
+
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const result = await actor.assign_host(
+        event.series_id,
+        (event.series_id && event.series_id.length > 0) ? [event.occurrence_start_utc.length > 0 ? event.occurrence_start_utc[0] : event.start_utc] : [],
+        event.instance_id,
+        selectedUser.principal,
+        { Secondary: null }
+      );
+      if ('Ok' in result) { setShowAddCoHost(false); onRefresh(); }
+      else setActionError(getErrorMessage(result.Err));
+    } catch (err) {
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setActionError('Your session has expired. Please sign in again.');
+      } else {
+        setActionError('Failed to assign co-host');
+      }
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRemoveHost2 = async () => {
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const result = await actor.unassign_host(
+        event.series_id,
+        (event.series_id && event.series_id.length > 0) ? [event.occurrence_start_utc.length > 0 ? event.occurrence_start_utc[0] : event.start_utc] : [],
+        event.instance_id,
+        { Secondary: null }
+      );
+      if ('Ok' in result) onRefresh();
+      else setActionError(getErrorMessage(result.Err));
+    } catch (err) {
+      if (isSessionExpiredError(err)) {
+        triggerSessionExpired();
+        setActionError('Your session has expired. Please sign in again.');
+      } else {
+        setActionError('Failed to remove co-host');
       }
     } finally {
       setActionLoading(false);
@@ -626,7 +724,8 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
         event.series_id,
         (event.series_id && event.series_id.length > 0) ? [event.occurrence_start_utc.length > 0 ? event.occurrence_start_utc[0] : event.start_utc] : [],
         event.instance_id,
-        currentUser.principal
+        currentUser.principal,
+        { Primary: null }
       );
       if ('Ok' in result) onRefresh();
       else setActionError(getErrorMessage(result.Err));
@@ -715,6 +814,10 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
       label: u.principal.toText() === currentPrincipal ? `${u.name} (me)` : u.name,
     }));
 
+  // Co-host options exclude whoever already holds the primary slot
+  const primaryHostText = event.host_principal.length > 0 ? (event.host_principal[0]?.toText() ?? null) : null;
+  const hostOptions2: SelectOption[] = hostOptions.filter(o => o.value !== primaryHostText);
+
   return (
     <Modal open={true} onClose={onClose} title={event.title} maxWidth="420px">
         {isCancelled && <div style={modalStyles.cancelledBadge}>Cancelled</div>}
@@ -735,6 +838,12 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
           <span style={modalStyles.detailLabel}>Host</span>
           <span style={{ ...modalStyles.detailValue, color: isNoHost ? '#F87171' : theme.textPrimary }}>{hostName}</span>
         </div>
+        {allowSecondHost && hasHost2 && (
+          <div style={modalStyles.detail}>
+            <span style={modalStyles.detailLabel}>Co-host</span>
+            <span style={modalStyles.detailValue}>{host2Name}</span>
+          </div>
+        )}
         {event.notes && (
           <div style={modalStyles.detail}>
             <span style={modalStyles.detailLabel}>Notes</span>
@@ -778,6 +887,37 @@ function EventDetailModal({ event, hostName, currentUser, actor, triggerSessionE
           {!isCancelled && !isHost && isAdmin && hasHost && (
             <Button variant="secondary" onClick={handleRemoveHost} loading={actionLoading}>
               Remove host
+            </Button>
+          )}
+          {!isCancelled && allowSecondHost && !hasHost2 && !showAddCoHost && (
+            <Button variant="secondary" onClick={() => setShowAddCoHost(true)}>
+              + Add co-host
+            </Button>
+          )}
+          {!isCancelled && allowSecondHost && (showAddCoHost || hasHost2) && (!hasHost2 || isAdmin) && (
+            <div style={modalStyles.assignSection}>
+              <Select
+                options={hostOptions2}
+                value={selectedUserId2}
+                onChange={setSelectedUserId2}
+                placeholder="Select a co-host..."
+                searchable={hostOptions2.length > 5}
+                dropUp
+                style={{ flex: 1 }}
+              />
+              <Button variant="primary" onClick={handleAssignHost2} loading={actionLoading} disabled={!selectedUserId2}>
+                {hasHost2 ? 'Reassign co-host' : 'Assign co-host'}
+              </Button>
+            </div>
+          )}
+          {!isCancelled && isHost2 && (
+            <Button variant="secondary" onClick={handleRemoveHost2} loading={actionLoading}>
+              Remove myself as co-host
+            </Button>
+          )}
+          {!isCancelled && !isHost2 && isAdmin && hasHost2 && (
+            <Button variant="secondary" onClick={handleRemoveHost2} loading={actionLoading}>
+              Remove co-host
             </Button>
           )}
           {!isCancelled && hasHost && (
@@ -935,8 +1075,8 @@ const styles: { [key: string]: React.CSSProperties } = {
   monthEventNoHost: { background: 'rgba(248, 113, 113, 0.15)', borderLeftColor: '#F87171' },
   monthEventTitle: { fontSize: '12px', fontWeight: 600, color: theme.textPrimary, marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   monthEventTime: { fontSize: '11px', fontWeight: 500, color: theme.textSecondary, marginBottom: '1px' },
-  monthEventHost: { fontSize: '11px', fontWeight: 500, color: theme.accent },
-  monthEventHostNoHost: { fontSize: '11px', fontWeight: 500, color: '#F87171' },
+  monthEventHost: { fontSize: '11px', fontWeight: 500, color: theme.accent, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  monthEventHostNoHost: { fontSize: '11px', fontWeight: 500, color: '#F87171', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
   moreEvents: { fontSize: '11px', color: theme.textMuted, padding: '4px 8px' },
 
   // Week view
@@ -954,8 +1094,8 @@ const styles: { [key: string]: React.CSSProperties } = {
   eventCancelled: { opacity: 0.5, borderLeftColor: theme.textMuted, textDecoration: 'line-through' },
   eventTime: { fontSize: '13px', color: theme.textMuted, marginBottom: '4px', fontWeight: 500 },
   eventTitle: { fontSize: '14px', fontWeight: 600, color: theme.textPrimary, marginBottom: '4px' },
-  eventHost: { fontSize: '13px', color: theme.accent, fontWeight: 500 },
-  eventHostNoHost: { fontSize: '13px', color: '#F87171', fontWeight: 500 },
+  eventHost: { fontSize: '13px', color: theme.accent, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  eventHostNoHost: { fontSize: '13px', color: '#F87171', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
 };
 
 const modalStyles: { [key: string]: React.CSSProperties } = {
@@ -982,8 +1122,8 @@ const modalStyles: { [key: string]: React.CSSProperties } = {
   agendaTime: { minWidth: '80px', flexShrink: 0 } as React.CSSProperties,
   agendaTimeStart: { fontSize: '14px', fontWeight: 600, color: theme.textPrimary } as React.CSSProperties,
   agendaTimeEnd: { fontSize: '12px', color: theme.textMuted } as React.CSSProperties,
-  agendaInfo: { flex: 1 } as React.CSSProperties,
+  agendaInfo: { flex: 1, minWidth: 0 } as React.CSSProperties,
   agendaTitle: { fontSize: '15px', fontWeight: 600, color: theme.textPrimary, marginBottom: '2px' } as React.CSSProperties,
-  agendaHost: { fontSize: '13px', color: theme.accent } as React.CSSProperties,
-  agendaHostNoHost: { fontSize: '13px', color: '#F87171' } as React.CSSProperties,
+  agendaHost: { fontSize: '13px', color: theme.accent, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } as React.CSSProperties,
+  agendaHostNoHost: { fontSize: '13px', color: '#F87171', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } as React.CSSProperties,
 };

@@ -113,7 +113,8 @@ export default function CoverageQueue() {
         seriesId,
         occurrenceStart,
         event.instance_id,
-        Principal.fromText(hostPrincipal)
+        Principal.fromText(hostPrincipal),
+        { Primary: null }
       );
       
       if ('Ok' in result) {
@@ -157,7 +158,7 @@ export default function CoverageQueue() {
     try {
       const seriesId = event.series_id;
       const occurrenceStart = (seriesId && seriesId.length > 0) ? [event.occurrence_start_utc.length > 0 ? event.occurrence_start_utc[0] : event.start_utc] : [];
-      const result = await actor.assign_host(seriesId, occurrenceStart, event.instance_id, user.principal);
+      const result = await actor.assign_host(seriesId, occurrenceStart, event.instance_id, user.principal, { Primary: null });
       if ('Ok' in result) {
         showToast(`Claimed by you!`);
         setCoveredIds(prev => new Set(prev).add(eventKey));
@@ -228,7 +229,8 @@ export default function CoverageQueue() {
           event.series_id ? [Array.from(event.series_id)] : [],
           occStart ? [occStart] : [],
           Array.from(event.instance_id as number[]),
-          Principal.fromText(bulkHost)
+          Principal.fromText(bulkHost),
+          { Primary: null }
         );
         if ('Ok' in result) successCount++;
       } catch (err) {

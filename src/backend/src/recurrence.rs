@@ -8,6 +8,7 @@
 
 use crate::storage;
 use crate::types::*;
+use candid::Principal;
 use sha2::{Digest, Sha256};
 
 /// Generate a deterministic instance ID from series_id and occurrence start time
@@ -322,6 +323,27 @@ pub fn calculate_window_end(from: u64, months: u8) -> u64 {
     ymd_to_nanos(year, month, last_day) + 86400 * 1_000_000_000 - 1
 }
 
+/// Resolve the effective host for a given slot: explicit override wins, then
+/// the series default, unless the override explicitly cleared that slot.
+pub fn effective_host(ovr: Option<&InstanceOverride>, series_default: Option<Principal>, slot: HostSlot) -> Option<Principal> {
+    match slot {
+        HostSlot::Primary => {
+            if ovr.map(|o| o.host_cleared).unwrap_or(false) {
+                None
+            } else {
+                ovr.and_then(|o| o.host_principal).or(series_default)
+            }
+        }
+        HostSlot::Secondary => {
+            if ovr.and_then(|o| o.host_2_cleared).unwrap_or(false) {
+                None
+            } else {
+                ovr.and_then(|o| o.host_principal_2).or(series_default)
+            }
+        }
+    }
+}
+
 /// Materialize all events within a time window
 /// Combines generated series occurrences with overrides and one-off events
 pub fn materialize_events(window_start: u64, window_end: u64) -> Vec<EventInstance> {
@@ -375,13 +397,8 @@ pub fn materialize_events(window_start: u64, window_end: u64) -> Vec<EventInstan
             }
 
             // Host: check if explicitly cleared, otherwise use override value, then fall back to series default
-            let host_principal = if ovr.as_ref().map(|o| o.host_cleared).unwrap_or(false) {
-                None
-            } else {
-                ovr.as_ref()
-                    .and_then(|o| o.host_principal)
-                    .or(series.default_host)
-            };
+            let host_principal = effective_host(ovr.as_ref(), series.default_host, HostSlot::Primary);
+            let host_principal_2 = effective_host(ovr.as_ref(), series.default_host_2, HostSlot::Secondary);
 
             results.push(EventInstance {
                 instance_id,
@@ -397,6 +414,8 @@ pub fn materialize_events(window_start: u64, window_end: u64) -> Vec<EventInstan
                 exclude_from_coverage: series.exclude_from_coverage,
                 created_at: series.created_at,
                 occurrence_start_utc: Some(occ_start),
+                host_principal_2,
+                allow_second_host: Some(series.allow_second_host.unwrap_or(false)),
             });
         }
     }

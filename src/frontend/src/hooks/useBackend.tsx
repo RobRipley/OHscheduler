@@ -17,7 +17,8 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'Fourth': IDL.Null, 'Last': IDL.Null 
   });
   const EventStatus = IDL.Variant({ 'Active': IDL.Null, 'Cancelled': IDL.Null });
-  
+  const HostSlot = IDL.Variant({ 'Primary': IDL.Null, 'Secondary': IDL.Null });
+
   const OOOBlock = IDL.Record({
     'start_utc': IDL.Nat64,
     'end_utc': IDL.Nat64,
@@ -63,6 +64,8 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'exclude_from_coverage': IDL.Bool,
     'created_at': IDL.Nat64,
     'created_by': IDL.Principal,
+    'allow_second_host': IDL.Opt(IDL.Bool),
+    'default_host_2': IDL.Opt(IDL.Principal),
   });
 
 
@@ -80,6 +83,8 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'exclude_from_coverage': IDL.Bool,
     'created_at': IDL.Nat64,
     'occurrence_start_utc': IDL.Opt(IDL.Nat64),
+    'host_principal_2': IDL.Opt(IDL.Principal),
+    'allow_second_host': IDL.Opt(IDL.Bool),
   });
 
   const GlobalSettings = IDL.Record({
@@ -123,6 +128,8 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'color': IDL.Opt(IDL.Text),
     'default_host': IDL.Opt(IDL.Principal),
     'exclude_from_coverage': IDL.Opt(IDL.Bool),
+    'allow_second_host': IDL.Opt(IDL.Bool),
+    'default_host_2': IDL.Opt(IDL.Principal),
   });
 
 
@@ -135,6 +142,8 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
     'paused': IDL.Opt(IDL.Bool),
     'default_host': IDL.Opt(IDL.Opt(IDL.Principal)),
     'exclude_from_coverage': IDL.Opt(IDL.Bool),
+    'allow_second_host': IDL.Opt(IDL.Bool),
+    'default_host_2': IDL.Opt(IDL.Opt(IDL.Principal)),
   });
 
   const ApiError = IDL.Variant({
@@ -214,12 +223,12 @@ const idlFactory = ({ IDL }: { IDL: any }) => {
 
     // Coverage Queue
     'assign_host': IDL.Func(
-      [IDL.Opt(IDL.Vec(IDL.Nat8)), IDL.Opt(IDL.Nat64), IDL.Vec(IDL.Nat8), IDL.Principal], 
-      [Result_EventInstance], 
+      [IDL.Opt(IDL.Vec(IDL.Nat8)), IDL.Opt(IDL.Nat64), IDL.Vec(IDL.Nat8), IDL.Principal, HostSlot],
+      [Result_EventInstance],
       []
     ),
     'unassign_host': IDL.Func(
-      [IDL.Opt(IDL.Vec(IDL.Nat8)), IDL.Opt(IDL.Nat64), IDL.Vec(IDL.Nat8)],
+      [IDL.Opt(IDL.Vec(IDL.Nat8)), IDL.Opt(IDL.Nat64), IDL.Vec(IDL.Nat8), HostSlot],
       [Result_EventInstance],
       []
     ),
@@ -297,7 +306,11 @@ export interface EventInstance {
   exclude_from_coverage: boolean;
   created_at: bigint;
   occurrence_start_utc: [bigint] | [];
+  host_principal_2: [Principal] | [];
+  allow_second_host: [boolean] | [];
 }
+
+export type HostSlot = { Primary: null } | { Secondary: null };
 
 
 export interface EventSeries {
@@ -317,6 +330,8 @@ export interface EventSeries {
   exclude_from_coverage: boolean;
   created_at: bigint;
   created_by: Principal;
+  allow_second_host: [boolean] | [];
+  default_host_2: [Principal] | [];
 }
 
 export interface GlobalSettings {
@@ -363,6 +378,8 @@ export interface CreateSeriesInput {
   color: [string] | [];
   default_host: [Principal] | [];
   exclude_from_coverage: [boolean] | [];
+  allow_second_host: [boolean] | [];
+  default_host_2: [Principal] | [];
 }
 
 
