@@ -487,14 +487,29 @@ const BackendContext = createContext<BackendContextType | null>(null);
 let cachedActor: any = null;
 let cachedIdentityPrincipal: string | null = null;
 
+// Fingerprint of a sign-in session. The principal alone is not enough: signing
+// out and back in yields the SAME principal (stable derivationOrigin) but a new
+// session key and delegation. Keying only on the principal kept reusing an actor
+// whose agent still signed with the old, expired delegation.
+function identityKey(identity?: Identity): string {
+  if (!identity) return 'anonymous';
+  const principal = identity.getPrincipal().toText();
+  const chain = (identity as any).getDelegation?.();
+  const last = chain?.delegations?.[chain.delegations.length - 1]?.delegation;
+  if (!last) return principal;
+  const pubkey = Array.from(new Uint8Array(last.pubkey))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  return `${principal}:${last.expiration.toString()}:${pubkey}`;
+}
+
 async function createActor(identity?: Identity) {
-  // Get the principal string for comparison
-  const currentPrincipal = identity ? identity.getPrincipal().toText() : 'anonymous';
-  
-  // If identity changed (different principal), recreate actor
-  if (currentPrincipal !== cachedIdentityPrincipal) {
-    console.log('[createActor] Identity changed, recreating actor. Old:', cachedIdentityPrincipal, 'New:', currentPrincipal);
-    cachedIdentityPrincipal = currentPrincipal;
+  const currentKey = identityKey(identity);
+
+  // If the sign-in session changed (new delegation or different principal), recreate actor
+  if (currentKey !== cachedIdentityPrincipal) {
+    console.log('[createActor] Sign-in session changed, recreating actor');
+    cachedIdentityPrincipal = currentKey;
     cachedActor = null;
   }
   
@@ -615,25 +630,26 @@ export function useBackend() {
   const [actor, setActor] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [sessionExpired, setSessionExpired] = useState(false);
-  const [currentPrincipal, setCurrentPrincipal] = useState<string | null>(null);
+  const [currentKey, setCurrentKey] = useState<string | null>(null);
 
-  // Re-init actor whenever we detect the identity has changed
+  // Re-init actor whenever we detect the sign-in session has changed
   const initActor = useCallback(async () => {
     try {
       const authClient = await AuthClient.create();
       const identity = authClient.getIdentity();
-      const principalText = identity.getPrincipal().toText();
-      
-      // Skip if principal hasn't changed
-      if (principalText === currentPrincipal && cachedActor) {
+      const key = identityKey(identity);
+
+      // Skip if the sign-in session hasn't changed
+      if (key === currentKey && cachedActor) {
         setActor(cachedActor);
         setLoading(false);
         return;
       }
-      
+
       const backendActor = await createActor(identity);
       setActor(backendActor);
-      setCurrentPrincipal(principalText);
+      setCurrentKey(key);
+      setSessionExpired(false);
     } catch (err) {
       console.error('[useBackend] Failed to init backend actor:', err);
       if (isSessionExpiredError(err)) {
@@ -642,22 +658,22 @@ export function useBackend() {
     } finally {
       setLoading(false);
     }
-  }, [currentPrincipal]);
+  }, [currentKey]);
 
   // Init on mount
   useEffect(() => {
     initActor();
   }, [initActor]);
 
-  // Also poll for identity changes (handles post-login race condition)
+  // Also poll for sign-in changes (handles post-login race condition and
+  // re-login with the same principal)
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
         const authClient = await AuthClient.create();
         const identity = authClient.getIdentity();
-        const principalText = identity.getPrincipal().toText();
-        if (principalText !== currentPrincipal) {
-          console.log('[useBackend] Identity change detected, reinitializing actor...');
+        if (identityKey(identity) !== currentKey) {
+          console.log('[useBackend] Sign-in change detected, reinitializing actor...');
           cachedActor = null;
           cachedIdentityPrincipal = null;
           initActor();
@@ -665,7 +681,7 @@ export function useBackend() {
       } catch (_) { /* ignore */ }
     }, 1000);
     return () => clearInterval(interval);
-  }, [currentPrincipal, initActor]);
+  }, [currentKey, initActor]);
 
   const triggerSessionExpired = useCallback(() => {
     setSessionExpired(true);
